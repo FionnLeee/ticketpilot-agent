@@ -32,6 +32,7 @@ if __name__ == "__main__":
         "service:app",
         host=settings.HOST,
         port=settings.PORT,
+        loop="none" if sys.platform == "win32" else "auto",
         reload=settings.is_dev(),
         timeout_graceful_shutdown=settings.GRACEFUL_SHUTDOWN_TIMEOUT,
     )
