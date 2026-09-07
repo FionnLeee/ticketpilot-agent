@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from core.settings import LogLevel, Settings, check_str_is_http
+from core.settings import LogLevel, Settings, TicketPilotReasonerMode, check_str_is_http
 from schema.models import (
     AnthropicModelName,
     AzureOpenAIModelName,
@@ -35,6 +35,15 @@ def test_settings_default_values():
     assert settings.PORT == 8080
     assert settings.USE_AWS_BEDROCK is False
     assert settings.USE_FAKE_MODEL is False
+    assert settings.TICKETPILOT_REASONER_MODE is TicketPilotReasonerMode.LLM
+
+
+def test_settings_accepts_deterministic_ticketpilot_demo_mode():
+    settings = Settings(
+        _env_file=None,
+        TICKETPILOT_REASONER_MODE="deterministic_demo",
+    )
+    assert settings.TICKETPILOT_REASONER_MODE is TicketPilotReasonerMode.DETERMINISTIC_DEMO
 
 
 def test_settings_no_api_keys():

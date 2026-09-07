@@ -10,7 +10,7 @@ def test_service_with_fake_model():
 
     This test requires the service container to be running with USE_FAKE_MODEL=true
     """
-    client = AgentClient("http://0.0.0.0", agent="chatbot")
+    client = AgentClient("http://localhost:8080", agent="chatbot")
     response = client.invoke("Tell me a joke?", model="fake")
     assert response.type == "ai"
     assert response.content == "This is a test response from the fake model."
@@ -22,14 +22,14 @@ def test_service_with_app():
 
     This test requires the service container to be running with USE_FAKE_MODEL=true
     """
-    at = AppTest.from_file("../../src/streamlit_app.py").run()
+    at = AppTest.from_file("../../src/streamlit_app.py").run(timeout=10)
     assert at.chat_message[0].avatar == "assistant"
     welcome = at.chat_message[0].markdown[0].value
     assert welcome.startswith("Hello! I'm an AI-powered research assistant")
     assert not at.exception
 
     at.sidebar.selectbox[1].set_value("chatbot")
-    at.chat_input[0].set_value("What is the weather in Tokyo?").run()
+    at.chat_input[0].set_value("What is the weather in Tokyo?").run(timeout=10)
     assert at.chat_message[0].avatar == "user"
     assert at.chat_message[0].markdown[0].value == "What is the weather in Tokyo?"
     assert at.chat_message[1].avatar == "assistant"

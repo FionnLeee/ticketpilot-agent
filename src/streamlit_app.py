@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from client import AgentClient, AgentClientError
 from schema import ChatHistory, ChatMessage, UserThreads
 from schema.task_data import TaskData, TaskDataStatus
+from ticketpilot_streamlit import render_ticketpilot_console
 from voice import VoiceManager
 
 # A Streamlit app for interacting with the langgraph agent via a simple chat interface.
@@ -258,10 +259,20 @@ async def main() -> None:
         if st.button(":material/upload: Share/resume chat", use_container_width=True):
             share_chat_dialog()
 
+        show_ticketpilot_console = st.toggle(
+            "TicketPilot 业务控制台",
+            value=False,
+            key="show_ticketpilot_console",
+        )
+
         "[View the source code](https://github.com/JoshuaC215/agent-service-toolkit)"
         st.caption(
             "Made with :material/favorite: by [Joshua](https://www.linkedin.com/in/joshua-k-carroll/) in Oakland"
         )
+
+    if show_ticketpilot_console:
+        render_ticketpilot_console(agent_client.base_url)
+        st.divider()
 
     # Draw existing messages
     messages: list[ChatMessage] = st.session_state.messages

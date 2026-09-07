@@ -1,13 +1,14 @@
 import os
+from uuid import uuid4
 
 import pytest
 
 from client import AgentClient
 
 # Shared with scripts/smoke_test.sh via the environment so the script can verify
-# this exact thread's checkpoints landed in the intended backend. Falls back to a
-# fixed id when the test is run on its own.
-THREAD_ID = os.environ.get("SMOKE_THREAD_ID", "smoke-test-persistence-thread")
+# this exact thread's checkpoints landed in the intended backend. A standalone
+# run uses a unique fallback so persisted history from an earlier run cannot leak in.
+THREAD_ID = os.environ.get("SMOKE_THREAD_ID", f"smoke-test-persistence-{uuid4()}")
 
 
 @pytest.mark.docker

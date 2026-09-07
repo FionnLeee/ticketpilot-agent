@@ -23,11 +23,13 @@ services:
       - "8080:8080"
     env_file:
       - .env
+    environment:
+      - POSTGRES_HOST=postgres
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/info"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -51,6 +53,15 @@ services:
         - path: src/memory/
           action: sync+restart
           target: /app/memory/
+        - path: src/ticketpilot/
+          action: sync+restart
+          target: /app/ticketpilot/
+        - path: migrations/
+          action: sync+restart
+          target: /app/migrations/
+        - path: data/ticketpilot/
+          action: sync+restart
+          target: /app/data/ticketpilot/
   streamlit_app:
     build:
       context: .
@@ -60,7 +71,7 @@ services:
     depends_on:
       - agent_service
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3)"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -77,6 +88,9 @@ services:
         - path: src/streamlit_app.py
           action: sync+restart
           target: /app/streamlit_app.py
+        - path: src/ticketpilot_streamlit.py
+          action: sync+restart
+          target: /app/ticketpilot_streamlit.py
 
 volumes:
   postgres_data:

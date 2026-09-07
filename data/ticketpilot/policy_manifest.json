@@ -1,0 +1,10 @@
+{
+  "dataset_id": "ticketpilot-demo-policy-v1",
+  "schema_version": 1,
+  "corpus_path": "policies/after_sales_policy_v1.json",
+  "corpus_sha256": "aa142b3eb1a90d2e9163236c1c0517e02f284ffa223c89511bca1930bf36bc44",
+  "chunk_count": 6,
+  "effective_at": "2026-09-06T00:00:00+00:00",
+  "contains_real_personal_data": false,
+  "notice": "Synthetic policy for TicketPilot demonstration; not a real merchant policy."
+}

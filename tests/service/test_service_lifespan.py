@@ -1,9 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import FastAPI
 
+from core.settings import DatabaseType
 from schema import AgentInfo
 
 
@@ -52,6 +54,8 @@ async def test_lifespan(monkeypatch, caplog) -> None:
     monkeypatch.setattr(service, "initialize_store", fake_initialize_store)
     monkeypatch.setattr(service, "load_agent", fake_load_agent)
     monkeypatch.setattr(service, "get_agent", fake_get_agent)
+    monkeypatch.setattr(service.settings, "DATABASE_TYPE", DatabaseType.SQLITE)
+    monkeypatch.setattr(service.settings, "TICKETPILOT_ENABLED", False)
     monkeypatch.setattr(
         service,
         "get_all_agent_info",
@@ -75,3 +79,44 @@ async def test_lifespan(monkeypatch, caplog) -> None:
 
     assert "Agent loaded: good" in caplog.text
     assert "Failed to load agent bad: boom" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_lifespan_initializes_ticketpilot_only_when_enabled(monkeypatch) -> None:
+    from service import service
+
+    business_pool = object()
+
+    @asynccontextmanager
+    async def fake_initialize_database():
+        yield object()
+
+    @asynccontextmanager
+    async def fake_initialize_store():
+        yield object()
+
+    @asynccontextmanager
+    async def fake_get_ticketpilot_pool():
+        yield business_pool
+
+    apply_migrations = AsyncMock()
+    ticketpilot_graph = object()
+    build_ticketpilot_graph = Mock(return_value=ticketpilot_graph)
+    monkeypatch.setattr(service, "initialize_database", fake_initialize_database)
+    monkeypatch.setattr(service, "initialize_store", fake_initialize_store)
+    monkeypatch.setattr(service, "get_ticketpilot_pool", fake_get_ticketpilot_pool)
+    monkeypatch.setattr(service, "apply_migrations", apply_migrations)
+    monkeypatch.setattr(service, "build_ticketpilot_graph", build_ticketpilot_graph)
+    monkeypatch.setattr(service, "get_all_agent_info", lambda: [])
+    monkeypatch.setattr(service.settings, "DATABASE_TYPE", DatabaseType.POSTGRES)
+    monkeypatch.setattr(service.settings, "TICKETPILOT_ENABLED", True)
+    app = FastAPI()
+
+    async with service.lifespan(app):
+        assert app.state.ticketpilot_pool is business_pool
+        assert app.state.ticketpilot_graph is ticketpilot_graph
+
+    assert app.state.ticketpilot_pool is None
+    assert app.state.ticketpilot_graph is None
+    apply_migrations.assert_awaited_once_with(business_pool)
+    build_ticketpilot_graph.assert_called_once()

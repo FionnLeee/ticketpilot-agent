@@ -15,6 +15,10 @@ COPY src/core/ ./core/
 COPY src/memory/ ./memory/
 COPY src/schema/ ./schema/
 COPY src/service/ ./service/
+COPY src/ticketpilot/ ./ticketpilot/
+COPY data/ticketpilot/ ./data/ticketpilot/
+COPY migrations/ ./migrations/
 COPY src/run_service.py .
+COPY src/seed_ticketpilot_data.py .
 
 CMD ["python", "run_service.py"]

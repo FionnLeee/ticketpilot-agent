@@ -18,5 +18,6 @@ COPY src/client/ ./client/
 COPY src/schema/ ./schema/
 COPY src/voice/ ./voice/
 COPY src/streamlit_app.py .
+COPY src/ticketpilot_streamlit.py .
 
 CMD ["streamlit", "run", "streamlit_app.py"]

@@ -1,0 +1,54 @@
+{
+  "corpus_id": "ticketpilot-demo-policy-v1",
+  "schema_version": 1,
+  "chunks": [
+    {
+      "source_id": "tp-demo-after-sales-v1",
+      "chunk_id": "order-tracking",
+      "title": "订单物流与预计送达",
+      "tenant_ids": ["*"],
+      "keywords": ["物流", "发货", "快递", "运单", "追踪", "到货", "送达", "eta", "tracking"],
+      "content": "订单进入 SHIPPED 后，可以向客户提供承运商、脱敏运单号和预计送达时间。预计送达时间是估计值，不应表述为保证到达时间；不得返回完整运单号。"
+    },
+    {
+      "source_id": "tp-demo-after-sales-v1",
+      "chunk_id": "delivery-delay",
+      "title": "物流延迟处理",
+      "tenant_ids": ["*"],
+      "keywords": ["延迟", "超时", "逾期", "没收到", "未收到", "晚了", "delay", "overdue"],
+      "content": "当当前时间晚于预计送达时间且订单仍未 DELIVERED 时，应如实说明订单状态和延迟事实，并建议人工核查物流。仅凭预计时间逾期不能自动承诺补偿、补发或退款。"
+    },
+    {
+      "source_id": "tp-demo-after-sales-v1",
+      "chunk_id": "pending-or-cancelled-payment",
+      "title": "待支付与已取消订单",
+      "tenant_ids": ["*"],
+      "keywords": ["待支付", "没付款", "未付款", "取消", "已取消", "pending", "cancelled"],
+      "content": "PENDING 支付状态表示尚未确认收款，CANCELLED 表示订单已取消。这两种状态不得发起退款执行；客服可以解释状态，但不能把未确认的款项描述为已经退款。"
+    },
+    {
+      "source_id": "tp-demo-refund-v1",
+      "chunk_id": "refund-eligibility",
+      "title": "退款资格与金额上限",
+      "tenant_ids": ["*"],
+      "keywords": ["退款", "退钱", "可退", "退款金额", "refund", "refundable"],
+      "content": "只有订单源返回的 refundable_amount 大于零时，才可以生成退款提案；提案金额不得超过 refundable_amount。查询结果只代表当前可提案额度，不代表退款已经批准或执行。"
+    },
+    {
+      "source_id": "tp-demo-refund-v1",
+      "chunk_id": "refund-approval",
+      "title": "退款审批与幂等执行",
+      "tenant_ids": ["*"],
+      "keywords": ["退款", "审批", "批准", "拒绝", "重复退款", "幂等", "approve", "idempotent"],
+      "content": "退款属于高风险写操作。系统必须先保存 PENDING 审批并暂停；只有审批为 APPROVED、订单复验仍可退款且幂等键未执行时才能调用退款执行工具。审批前执行次数必须为零，重复恢复不得产生第二次退款。"
+    },
+    {
+      "source_id": "tp-demo-privacy-v1",
+      "chunk_id": "tracking-privacy",
+      "title": "订单信息与运单号脱敏",
+      "tenant_ids": ["*"],
+      "keywords": ["隐私", "脱敏", "完整运单", "运单号", "其他客户", "privacy", "mask"],
+      "content": "订单信息只能在当前 tenant 和已授权客户范围内查询。面向客户返回运单号时必须脱敏；无权访问的订单统一按不可见处理，不得确认其他客户或其他 tenant 的订单是否存在。"
+    }
+  ]
+}

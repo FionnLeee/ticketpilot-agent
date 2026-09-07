@@ -196,3 +196,12 @@ smoke_live_app_failure.png
 
 # Claude Code agent worktrees (ephemeral, per-agent git checkouts)
 .claude/worktrees/
+
+# Local TicketPilot study and design notes
+/UPSTREAM.md
+/docs/ARCHITECTURE.md
+/docs/CONTRIBUTION_MAP.md
+/docs/DATASET_STRATEGY.md
+/docs/LEARNING_NOTES_DAY_*.md
+/docs/TICKETPILOT_DEMO.md
+/docs/adr/0001-ticketpilot-scope.md

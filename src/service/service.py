@@ -3,7 +3,7 @@ import json
 import logging
 import warnings
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
@@ -30,6 +30,7 @@ from langsmith import uuid7
 
 from agents import DEFAULT_AGENT, AgentGraph, get_agent, get_all_agent_info, load_agent
 from core import settings
+from core.settings import DatabaseType
 from memory import initialize_database, initialize_store
 from schema import (
     ChatHistory,
@@ -52,6 +53,9 @@ from service.utils import (
     messages_from_checkpoint,
     remove_tool_calls,
 )
+from ticketpilot.api import install_ticketpilot_api
+from ticketpilot.db import apply_migrations, get_ticketpilot_pool
+from ticketpilot.graph import build_ticketpilot_graph
 
 warnings.filterwarnings("ignore", category=LangChainBetaWarning)
 logger = logging.getLogger(__name__)
@@ -82,14 +86,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     and agents with async loading - for example for starting up MCP clients.
     """
     try:
-        # Initialize both checkpointer (for short-term memory) and store (for long-term memory)
-        async with initialize_database() as saver, initialize_store() as store:
+        async with AsyncExitStack() as stack:
+            saver = await stack.enter_async_context(initialize_database())
+            store = await stack.enter_async_context(initialize_store())
+            app.state.ticketpilot_pool = None
+            app.state.ticketpilot_graph = None
+            if settings.TICKETPILOT_ENABLED:
+                if settings.DATABASE_TYPE != DatabaseType.POSTGRES:
+                    raise ValueError("TicketPilot requires DATABASE_TYPE=postgres")
+                business_pool = await stack.enter_async_context(get_ticketpilot_pool())
+                await apply_migrations(business_pool)
+                app.state.ticketpilot_pool = business_pool
+
             # Set up both components
             if hasattr(saver, "setup"):  # ignore: union-attr
                 await saver.setup()
             # Only setup store for Postgres as InMemoryStore doesn't need setup
             if hasattr(store, "setup"):  # ignore: union-attr
                 await store.setup()
+
+            if app.state.ticketpilot_pool is not None:
+                app.state.ticketpilot_graph = build_ticketpilot_graph(checkpointer=saver)
 
             if not settings.AUTH_SECRET:
                 logger.warning(
@@ -116,6 +133,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.error(f"Error during database/store/agents initialization: {e}")
         raise
+    finally:
+        app.state.ticketpilot_pool = None
+        app.state.ticketpilot_graph = None
 
 
 app = FastAPI(lifespan=lifespan, generate_unique_id_function=custom_generate_unique_id)
@@ -492,3 +512,4 @@ async def health_check():
 
 
 app.include_router(router)
+install_ticketpilot_api(app)

@@ -1,0 +1,31 @@
+services:
+  ticketpilot_seed:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+    env_file:
+      - .env
+    environment:
+      DATABASE_TYPE: postgres
+      POSTGRES_HOST: postgres
+      USE_FAKE_MODEL: "true"
+      DEFAULT_MODEL: fake
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "seed_ticketpilot_data.py"]
+    restart: "no"
+
+  agent_service:
+    environment:
+      DATABASE_TYPE: postgres
+      POSTGRES_HOST: postgres
+      USE_FAKE_MODEL: "true"
+      DEFAULT_MODEL: fake
+      TICKETPILOT_ENABLED: "true"
+      TICKETPILOT_REASONER_MODE: deterministic_demo
+      TICKETPILOT_AUTH_TOKENS: >-
+        {"demo-customer-token":{"tenant_id":"tenant-demo-01","actor_id":"customer-demo-01","role":"CUSTOMER"},"demo-approver-token":{"tenant_id":"tenant-demo-01","actor_id":"approver-demo-01","role":"APPROVER"},"other-tenant-token":{"tenant_id":"tenant-demo-02","actor_id":"approver-demo-02","role":"APPROVER"}}
+    depends_on:
+      ticketpilot_seed:
+        condition: service_completed_successfully

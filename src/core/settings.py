@@ -58,6 +58,11 @@ class LogLevel(StrEnum):
         return mapping[self]
 
 
+class TicketPilotReasonerMode(StrEnum):
+    LLM = "llm"
+    DETERMINISTIC_DEMO = "deterministic_demo"
+
+
 def check_str_is_http(x: str) -> str:
     http_url_adapter = TypeAdapter(HttpUrl)
     return str(http_url_adapter.validate_python(x))
@@ -134,6 +139,10 @@ class Settings(BaseSettings):
     POSTGRES_APPLICATION_NAME: str = "agent-service-toolkit"
     POSTGRES_MIN_CONNECTIONS_PER_POOL: int = 1
     POSTGRES_MAX_CONNECTIONS_PER_POOL: int = 1
+
+    TICKETPILOT_ENABLED: bool = False
+    TICKETPILOT_AUTH_TOKENS: dict[str, dict[str, str]] = Field(default_factory=dict)
+    TICKETPILOT_REASONER_MODE: TicketPilotReasonerMode = TicketPilotReasonerMode.LLM
 
     # MongoDB Configuration
     MONGO_HOST: str | None = None

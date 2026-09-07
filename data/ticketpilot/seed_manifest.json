@@ -1,0 +1,29 @@
+{
+  "dataset_id": "ticketpilot-seed-v1",
+  "schema_version": 1,
+  "generator_module": "ticketpilot.seed",
+  "generator_seed": 20260906,
+  "base_time": "2026-09-06T00:00:00+00:00",
+  "tenant_count": 3,
+  "customers_per_tenant": 4,
+  "orders_per_tenant": 40,
+  "expected_order_count": 120,
+  "contains_real_personal_data": false,
+  "license": "Project MIT license",
+  "inspiration_sources": [
+    {
+      "name": "tau2-bench retail",
+      "url": "https://github.com/sierra-research/tau2-bench",
+      "revision": "672227c6b6676edc20d57ea53b7000262aae77b9",
+      "license": "MIT",
+      "copied_records": false
+    },
+    {
+      "name": "Microsoft STATE-Bench customer support",
+      "url": "https://github.com/microsoft/STATE-Bench",
+      "revision": "5644b1838d96bc4483da29642d058ecaa6f80f7f",
+      "license": "MIT",
+      "copied_records": false
+    }
+  ]
+}
