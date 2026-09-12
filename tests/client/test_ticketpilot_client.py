@@ -45,6 +45,27 @@ def test_ticketpilot_client_add_message_sends_idempotency_key() -> None:
     assert requests[0].read() == b'{"message":"\xe7\xbb\xa7\xe7\xbb\xad\xe6\x9f\xa5\xe8\xaf\xa2"}'
 
 
+def test_ticketpilot_client_create_ticket_sends_idempotency_key() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(201, json={"run_id": "run-1", "ticket": {}})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+        client = TicketPilotClient("http://ticketpilot.test", client=http_client)
+        client.create_ticket(
+            "opaque-token",
+            subject="查询物流",
+            message="订单在哪里？",
+            idempotency_key="create-attempt-1",
+        )
+
+    assert requests[0].url == "http://ticketpilot.test/v1/tickets"
+    assert requests[0].headers["Idempotency-Key"] == "create-attempt-1"
+    assert requests[0].headers["Authorization"] == "Bearer opaque-token"
+
+
 def test_ticketpilot_client_surfaces_structured_api_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

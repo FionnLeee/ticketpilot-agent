@@ -102,6 +102,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.pytest_env]
 OPENAI_API_KEY = "sk-fake-openai-key"
+TICKETPILOT_ENABLED = "false"
 
 [tool.pymarkdown]
 # Docs use long, unwrapped prose lines rather than hard-wrapping at a fixed

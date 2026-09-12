@@ -77,18 +77,34 @@ def run_demo(args: argparse.Namespace) -> dict[str, Any]:
     client = DemoClient(args.base_url, args.timeout)
     try:
         client.wait_until_ready(args.wait_seconds)
+        normal_key = f"create-normal-{uuid4()}"
+        normal_payload = {
+            "subject": "Day 14 物流查询",
+            "message": "请查询订单 TP-0009 的物流和预计送达时间",
+            "order_reference": "TP-0009",
+        }
         normal = client.request(
             "POST",
             "/v1/tickets",
             args.customer_token,
             expected_status=201,
-            payload={
-                "subject": "Day 14 物流查询",
-                "message": "请查询订单 TP-0009 的物流和预计送达时间",
-                "order_reference": "TP-0009",
-            },
+            payload=normal_payload,
+            idempotency_key=normal_key,
+        )
+        normal_replay = client.request(
+            "POST",
+            "/v1/tickets",
+            args.customer_token,
+            expected_status=201,
+            payload=normal_payload,
+            idempotency_key=normal_key,
         )
         require(normal["ticket"]["status"] == "RESOLVED", "normal flow did not resolve")
+        require(
+            normal_replay["ticket"]["id"] == normal["ticket"]["id"]
+            and normal_replay["run_id"] == normal["run_id"],
+            "ticket creation retry was not idempotent",
+        )
         normal_events = client.request(
             "GET", f"/v1/runs/{normal['run_id']}/events", args.customer_token
         )
@@ -139,6 +155,7 @@ def run_demo(args: argparse.Namespace) -> dict[str, Any]:
                 "message": "订单 TP-0005 申请退款 1 元",
                 "order_reference": "TP-0005",
             },
+            idempotency_key=f"create-refund-{uuid4()}",
         )
         require(
             refund["ticket"]["status"] == "WAITING_APPROVAL",

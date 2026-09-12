@@ -9,6 +9,20 @@ from schema import ChatHistory, ChatMessage, ThreadSummary, UserThreads
 from schema.models import OpenAIModelName
 
 
+def test_ticketpilot_mode_opens_console_without_generic_history(mock_agent_client):
+    mock_agent_client.info.ticketpilot_enabled = True
+    mock_agent_client.info.agents = []
+    at = AppTest.from_file("../../src/streamlit_app.py")
+    at.query_params["thread_id"] = "known-private-thread"
+    with patch("ticketpilot_streamlit.render_ticketpilot_console") as render:
+        at.run(timeout=10)
+    assert not at.exception
+    assert not at.chat_input
+    render.assert_called_once_with(mock_agent_client.base_url)
+    mock_agent_client.get_history.assert_not_called()
+    mock_agent_client.get_user_threads.assert_not_called()
+
+
 def test_app_simple_non_streaming(mock_agent_client):
     """Test the full app - happy path"""
     at = AppTest.from_file("../../src/streamlit_app.py").run(timeout=10)
@@ -252,12 +266,14 @@ def test_ticketpilot_console_creates_ticket_and_renders_timeline(mock_agent_clie
         at.text_input(key="ticketpilot_viewer_token").set_value("customer-token")
         at.text_input(key="ticketpilot_subject").set_value("查询物流")
         at.text_area(key="ticketpilot_message").set_value("订单什么时候送到？")
+        at.text_input(key="ticketpilot_create_idempotency_key").set_value("create-ui-1")
         at.button(key="ticketpilot_create").click().run()
 
     ticket_client.create_ticket.assert_called_with(
         "customer-token",
         subject="查询物流",
         message="订单什么时候送到？",
+        idempotency_key="create-ui-1",
         order_reference=None,
     )
     ticket_client.get_run_events.assert_called_with("customer-token", run_id)

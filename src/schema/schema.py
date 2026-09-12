@@ -23,6 +23,10 @@ class AgentInfo(BaseModel):
 class ServiceMetadata(BaseModel):
     """Metadata about the service including available agents and models."""
 
+    ticketpilot_enabled: bool = Field(
+        default=False, description="Whether the service exposes only TicketPilot business routes."
+    )
+
     agents: list[AgentInfo] = Field(
         description="List of available agents.",
     )

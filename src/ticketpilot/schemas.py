@@ -104,6 +104,7 @@ class PolicySearchResult(TicketPilotModel):
 
 
 class TicketClassification(TicketPilotModel):
+    full_refund_requested: bool = False
     category: TicketCategory
     priority: TicketPriority = TicketPriority.NORMAL
     order_reference: str | None = Field(default=None, min_length=1, max_length=128)

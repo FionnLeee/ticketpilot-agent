@@ -102,12 +102,18 @@ async def test_lifespan_initializes_ticketpilot_only_when_enabled(monkeypatch) -
     apply_migrations = AsyncMock()
     ticketpilot_graph = object()
     build_ticketpilot_graph = Mock(return_value=ticketpilot_graph)
+    load_agent = AsyncMock()
+    get_agent = Mock()
+    monkeypatch.setattr(service, "load_agent", load_agent)
+    monkeypatch.setattr(service, "get_agent", get_agent)
     monkeypatch.setattr(service, "initialize_database", fake_initialize_database)
     monkeypatch.setattr(service, "initialize_store", fake_initialize_store)
     monkeypatch.setattr(service, "get_ticketpilot_pool", fake_get_ticketpilot_pool)
     monkeypatch.setattr(service, "apply_migrations", apply_migrations)
     monkeypatch.setattr(service, "build_ticketpilot_graph", build_ticketpilot_graph)
-    monkeypatch.setattr(service, "get_all_agent_info", lambda: [])
+    monkeypatch.setattr(
+        service, "get_all_agent_info", lambda: [AgentInfo(key="chatbot", description="")]
+    )
     monkeypatch.setattr(service.settings, "DATABASE_TYPE", DatabaseType.POSTGRES)
     monkeypatch.setattr(service.settings, "TICKETPILOT_ENABLED", True)
     app = FastAPI()
@@ -120,3 +126,5 @@ async def test_lifespan_initializes_ticketpilot_only_when_enabled(monkeypatch) -
     assert app.state.ticketpilot_graph is None
     apply_migrations.assert_awaited_once_with(business_pool)
     build_ticketpilot_graph.assert_called_once()
+    load_agent.assert_not_awaited()
+    get_agent.assert_not_called()

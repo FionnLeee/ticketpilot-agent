@@ -21,6 +21,20 @@
 
 TicketPilot 专用演示数据和政策都是合成数据，不包含真实客户信息；确定性 demo reasoner 只用于 E2E，不代表模型质量。
 
+设置 `TICKETPILOT_ENABLED=true` 并重启后，服务进入专用模式：保留 `/v1` 业务接口、`/info` 和 `/health`，不挂载通用 invoke、stream、history、threads、feedback 及 AG-UI 路由（请求返回 404）。Streamlit 新会话直接进入业务控制台；已有页面需要清除会话缓存后重载。业务接口始终使用 `TICKETPILOT_AUTH_TOKENS` 校验身份，`AUTH_SECRET` 不能替代业务授权。
+
+这是通过关闭通用入口实现的应用边界，并未迁移或物理隔离历史 checkpoint。需要运行上游通用示例时，使用独立数据库／checkpoint 存储启动另一实例；不要将保存了 TicketPilot 数据的实例切回通用模式对外开放。`/info` 的 `ticketpilot_enabled` 字段供界面识别模式；旧服务未提供时客户端默认按通用模式处理。
+
+退款分类由 reasoner 的结构化结果决定，代码不会仅凭“退款”关键词覆盖分类。只有明确金额或明确全额意图才提出退款；缺订单号、缺金额或订单冲突进入 `WAITING_INFORMATION`，不创建审批。待补充的退款信息保存在业务表；只对单独补充的订单号或数字金额继承，取消及其他新话题不沿用旧申请。这是有明确范围的多轮补充，不是通用长期记忆。
+
+启动会应用 `0003_waiting_information.sql`，新增状态和 `pending_request` 字段；使用过新状态后，不应只回退旧应用代码。正常申请仍须人工审批后执行模拟退款。真实模型的意图识别质量需另做评测，确定性测试通过不代表模型准确率。
+
+同工单的消息与审批在数据库事务中预留活动 run，进入 Graph 前只允许一个执行者认领；消息 run 读取绑定的触发消息。执行期间的新消息／重复执行请求返回 409，拒绝的新消息不落库。运行结束并读取响应后释放占用，迟到的旧 run 不能改写当前状态。启动会应用 `0004_run_ownership.sql`；部署迁移前应停止接收请求并等待旧运行退出。
+
+当前没有租约或自动接管：进程被强制终止后，已认领的 run 可能保留占用，需要后续恢复机制处理。协作式取消已有失败记录与释放测试；不能将其等同于断电恢复。
+
+创建工单也必须携带 `Idempotency-Key`。服务按 tenant、调用主体和 key 保存规范化请求摘要：同 key 同正文返回原 `ticket_id/run_id`，同 key 换正文返回 409，创建新工单必须换 key。退款审批使用触发消息 ID 作为稳定 `action_id`；同一消息或工作流节点重放复用原审批，而新消息再次申请相同金额会创建新审批。`0005_request_action_idempotency.sql` 为这两层语义增加数据库唯一约束。
+
 ### [在线体验应用](https://agent-service-toolkit.streamlit.app/)
 
 <a href="https://agent-service-toolkit.streamlit.app/"><img src="media/app_screenshot.png" width="600" alt="应用截图"></a>

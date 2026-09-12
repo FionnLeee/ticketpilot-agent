@@ -61,9 +61,12 @@ class FakeTicketService:
         self.events_call = None
 
     async def create_ticket(
-        self, principal: RequestPrincipal, request: CreateTicketRequest
+        self,
+        principal: RequestPrincipal,
+        request: CreateTicketRequest,
+        idempotency_key: str,
     ) -> TicketRunResult:
-        self.create_call = (principal, request)
+        self.create_call = (principal, request, idempotency_key)
         return self.result
 
     async def get_ticket(self, principal: RequestPrincipal, ticket_id) -> TicketDetail:
@@ -90,9 +93,7 @@ class FakeTicketService:
         self.decision_call = (principal, approval_id, request)
         return self.result
 
-    async def get_run_events(
-        self, principal: RequestPrincipal, run_id
-    ) -> RunEventsResponse:
+    async def get_run_events(self, principal: RequestPrincipal, run_id) -> RunEventsResponse:
         self.events_call = (principal, run_id)
         return RunEventsResponse(
             run_id=run_id,
@@ -142,7 +143,10 @@ def test_create_ticket_uses_principal_from_token(monkeypatch) -> None:
 
     response = client.post(
         "/v1/tickets",
-        headers={"Authorization": "Bearer customer-token"},
+        headers={
+            "Authorization": "Bearer customer-token",
+            "Idempotency-Key": "create-attempt-1",
+        },
         json={
             "subject": "查询物流",
             "message": "订单什么时候送到？",
@@ -152,10 +156,25 @@ def test_create_ticket_uses_principal_from_token(monkeypatch) -> None:
 
     assert response.status_code == 201
     assert response.json()["ticket"]["status"] == "NEW"
-    principal, request = fake_service.create_call
+    principal, request, key = fake_service.create_call
     assert principal.tenant_id == "tenant-a"
     assert principal.actor_id == "customer-a"
     assert request.order_reference == "O-9527"
+    assert key == "create-attempt-1"
+
+
+def test_create_ticket_requires_idempotency_key(monkeypatch) -> None:
+    fake_service = FakeTicketService(make_run_result())
+    client = build_client(fake_service, monkeypatch)
+
+    response = client.post(
+        "/v1/tickets",
+        headers={"Authorization": "Bearer customer-token"},
+        json={"subject": "查询物流", "message": "订单在哪里？"},
+    )
+
+    assert response.status_code == 422
+    assert fake_service.create_call is None
 
 
 def test_ticketpilot_rejects_unknown_bearer_token(monkeypatch) -> None:
@@ -164,7 +183,10 @@ def test_ticketpilot_rejects_unknown_bearer_token(monkeypatch) -> None:
 
     response = client.post(
         "/v1/tickets",
-        headers={"Authorization": "Bearer attacker-token"},
+        headers={
+            "Authorization": "Bearer attacker-token",
+            "Idempotency-Key": "create-attacker",
+        },
         json={"subject": "查询物流", "message": "订单在哪里？"},
     )
 

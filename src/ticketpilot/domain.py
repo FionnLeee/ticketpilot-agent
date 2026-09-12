@@ -5,6 +5,7 @@ class TicketStatus(StrEnum):
     NEW = "NEW"
     PROCESSING = "PROCESSING"
     WAITING_APPROVAL = "WAITING_APPROVAL"
+    WAITING_INFORMATION = "WAITING_INFORMATION"
     RESOLVED = "RESOLVED"
     FAILED = "FAILED"
 
@@ -101,11 +102,13 @@ ALLOWED_TICKET_TRANSITIONS: dict[TicketStatus, frozenset[TicketStatus]] = {
     TicketStatus.PROCESSING: frozenset(
         {
             TicketStatus.WAITING_APPROVAL,
+            TicketStatus.WAITING_INFORMATION,
             TicketStatus.RESOLVED,
             TicketStatus.FAILED,
         }
     ),
     TicketStatus.WAITING_APPROVAL: frozenset({TicketStatus.PROCESSING}),
+    TicketStatus.WAITING_INFORMATION: frozenset({TicketStatus.PROCESSING}),
     TicketStatus.RESOLVED: frozenset({TicketStatus.PROCESSING}),
     TicketStatus.FAILED: frozenset({TicketStatus.PROCESSING}),
 }

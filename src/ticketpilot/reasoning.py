@@ -43,10 +43,21 @@ class DeterministicDemoReasoner:
         del config
         normalized = message.casefold()
         reference_match = ORDER_REFERENCE_PATTERN.search(message)
-        order_reference = known_order_reference or (
-            reference_match.group(0).upper() if reference_match else None
+        order_reference = reference_match.group(0) if reference_match else known_order_reference
+        denied = bool(
+            re.search(
+                r"不(?:需要|要|用|想)?(?:退款|退钱|退费|退了)|不退了|取消退款|don't.*refund|no refund",
+                normalized,
+            )
         )
-        if any(term in normalized for term in REFUND_TERMS):
+        policy_only = any(term in normalized for term in POLICY_TERMS)
+        if denied:
+            category = TicketCategory.ORDER_STATUS if "物流" in message else TicketCategory.OTHER
+            priority = TicketPriority.NORMAL
+        elif policy_only:
+            category = TicketCategory.POLICY
+            priority = TicketPriority.NORMAL
+        elif any(term in normalized for term in REFUND_TERMS) or "退一部分" in message:
             category = TicketCategory.REFUND
             priority = TicketPriority.HIGH
         elif order_reference is not None:
@@ -62,6 +73,10 @@ class DeterministicDemoReasoner:
             category=category,
             priority=priority,
             order_reference=order_reference,
+            full_refund_requested=(
+                category is TicketCategory.REFUND
+                and any(term in normalized for term in ("全额", "全部", "full refund"))
+            ),
             requested_refund_amount=(
                 self._refund_amount(message, order_reference)
                 if category is TicketCategory.REFUND
@@ -81,6 +96,9 @@ class DeterministicDemoReasoner:
         evidence_text = "、".join(
             f"{item.title}（{item.chunk_id or item.source_id}）" for item in policy_evidence
         )
+        if classification.category is TicketCategory.POLICY and evidence_text:
+            excerpts = " ".join(item.excerpt for item in policy_evidence if item.excerpt)
+            return f"检索到的政策依据为：{excerpts} 参考：{evidence_text}。"
         if order_result and order_result.get("found") and order_result.get("order"):
             order = order_result["order"]
             answer = (
@@ -94,9 +112,6 @@ class DeterministicDemoReasoner:
             if evidence_text:
                 answer += f"参考依据：{evidence_text}。"
             return answer
-        if classification.category is TicketCategory.POLICY and evidence_text:
-            excerpts = " ".join(item.excerpt for item in policy_evidence if item.excerpt)
-            return f"检索到的政策依据为：{excerpts} 参考：{evidence_text}。"
         return "当前证据不足，无法给出可靠结论。"
 
     @staticmethod
@@ -104,7 +119,9 @@ class DeterministicDemoReasoner:
         amount_source = message
         if order_reference:
             amount_source = re.sub(re.escape(order_reference), "", amount_source, flags=re.I)
-        matches = re.findall(r"(?<![\d.])(\d+(?:\.\d{1,2})?)(?![\d.])", amount_source)
+        matches = re.findall(
+            r"(?<![\d.\-])(\d+(?:\.\d{1,2})?)\s*(?:元|块|CNY|yuan)", amount_source, flags=re.I
+        )
         if not matches:
             return None
         try:
@@ -131,7 +148,12 @@ class LangChainTicketReasoner:
                         "Classify one TicketPilot after-sales request. Extract an order reference "
                         "and explicitly requested refund amount when present. Use REFUND only when "
                         "the user requests money back; use ORDER_STATUS for order or delivery facts; "
-                        "use POLICY for policy-only questions; otherwise OTHER."
+                        "use POLICY for policy-only questions; otherwise OTHER. Negated or cancelled "
+                        "refund requests are not REFUND. Missing amount must stay null; never infer "
+                        "an amount from order numbers, dates or an account balance. Set "
+                        "full_refund_requested only for an explicit request to refund the full balance. "
+                        "Extract the order explicitly mentioned in this message even if it differs "
+                        "from known_order_reference. Do not infer a refund from a bare order number."
                     )
                 ),
                 HumanMessage(

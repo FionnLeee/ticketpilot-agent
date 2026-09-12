@@ -147,6 +147,7 @@ async def test_approvals_enforce_tenant_idempotency_key() -> None:
     ticket_id = uuid4()
     tenant_id = "tenant-idempotency-test"
     idempotency_key = f"refund-{uuid4()}"
+    first_action_id = uuid4()
 
     async with get_ticketpilot_pool() as pool:
         async with pool.connection() as connection:
@@ -168,15 +169,16 @@ async def test_approvals_enforce_tenant_idempotency_key() -> None:
             await connection.execute(
                 """
                 INSERT INTO ticketpilot.approvals (
-                    id, tenant_id, ticket_id, run_id, action_type,
+                    id, tenant_id, ticket_id, run_id, action_id, action_type,
                     action_payload, status, requested_by, idempotency_key
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     uuid4(),
                     tenant_id,
                     ticket_id,
                     uuid4(),
+                    first_action_id,
                     "REFUND",
                     '{"amount": "100.00", "currency": "CNY"}',
                     "PENDING",
@@ -190,14 +192,15 @@ async def test_approvals_enforce_tenant_idempotency_key() -> None:
                 await connection.execute(
                     """
                     INSERT INTO ticketpilot.approvals (
-                        id, tenant_id, ticket_id, run_id, action_type,
+                        id, tenant_id, ticket_id, run_id, action_id, action_type,
                         action_payload, status, requested_by, idempotency_key
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         uuid4(),
                         tenant_id,
                         ticket_id,
+                        uuid4(),
                         uuid4(),
                         "REFUND",
                         '{"amount": "100.00", "currency": "CNY"}',

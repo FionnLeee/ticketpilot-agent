@@ -59,33 +59,66 @@ class TicketService:
         self.policy_retriever = policy_retriever
         self.reasoner = reasoner
 
+    async def _invoke_owned(
+        self,
+        principal: RequestPrincipal,
+        ticket_id: UUID,
+        run_id: UUID,
+        thread_id: str,
+        graph_input: Any,
+    ) -> TicketRunResult:
+        context = self._workflow_context(principal)
+        workflow = self.workflow
+        if workflow is None:
+            raise TicketPilotUnavailable
+        await self.repository.claim_run(principal.tenant_id, ticket_id, run_id)
+        try:
+            await workflow.ainvoke(
+                graph_input,
+                config=RunnableConfig(configurable={"thread_id": thread_id}),
+                context=context,
+            )
+            return await self._run_result(principal, ticket_id, run_id)
+        except BaseException as exc:
+            await context.workflow_repository.fail_run(
+                principal.tenant_id,
+                ticket_id,
+                run_id,
+                type(exc).__name__,
+            )
+            raise
+        finally:
+            await self.repository.release_run(principal.tenant_id, ticket_id, run_id)
+
     async def create_ticket(
-        self, principal: RequestPrincipal, request: CreateTicketRequest
+        self,
+        principal: RequestPrincipal,
+        request: CreateTicketRequest,
+        idempotency_key: str,
     ) -> TicketRunResult:
         if principal.role not in CREATE_TICKET_ROLES:
             raise Forbidden
-
-        created = await self.repository.create(principal, request)
         if self.workflow is not None:
-            context = self._workflow_context(principal)
-            try:
-                await self.workflow.ainvoke(
-                    {
-                        "messages": [],
-                        "ticket_id": str(created.ticket["id"]),
-                        "run_id": str(created.run_id),
-                    },
-                    config=RunnableConfig(configurable={"thread_id": created.ticket["thread_id"]}),
-                    context=context,
-                )
-            except Exception as exc:
-                await context.workflow_repository.fail_run(
-                    principal.tenant_id,
-                    created.ticket["id"],
-                    created.run_id,
-                    type(exc).__name__,
-                )
-                raise
+            self._workflow_context(principal)
+        created = await self.repository.create(
+            principal,
+            request,
+            idempotency_key,
+            reserve_run=self.workflow is not None,
+        )
+        if self.workflow is not None and created.should_run:
+            return await self._invoke_owned(
+                principal,
+                created.ticket["id"],
+                created.run_id,
+                created.ticket["thread_id"],
+                {
+                    "messages": [],
+                    "ticket_id": str(created.ticket["id"]),
+                    "run_id": str(created.run_id),
+                },
+            )
+        if self.workflow is not None:
             return await self._run_result(principal, created.ticket["id"], created.run_id)
         return self._created_ticket_result(created, request.order_reference)
 
@@ -96,9 +129,6 @@ class TicketService:
         request: ApprovalDecisionRequest,
     ) -> TicketRunResult:
         context = self._workflow_context(principal)
-        workflow = self.workflow
-        if workflow is None:
-            raise TicketPilotUnavailable
         run_id = uuid4()
         decision = await context.workflow_repository.decide_approval(
             principal,
@@ -108,23 +138,13 @@ class TicketService:
             run_id,
         )
         if decision.should_resume:
-            try:
-                await workflow.ainvoke(
-                    Command(
-                        resume={"approval_id": str(approval_id)},
-                        update={"run_id": str(run_id)},
-                    ),
-                    config=RunnableConfig(configurable={"thread_id": decision.thread_id}),
-                    context=context,
-                )
-            except Exception as exc:
-                await context.workflow_repository.fail_run(
-                    principal.tenant_id,
-                    decision.ticket_id,
-                    run_id,
-                    type(exc).__name__,
-                )
-                raise
+            return await self._invoke_owned(
+                principal,
+                decision.ticket_id,
+                run_id,
+                decision.thread_id,
+                Command(resume={"approval_id": str(approval_id)}, update={"run_id": str(run_id)}),
+            )
         return await self._run_result(principal, decision.ticket_id, run_id)
 
     async def add_message(
@@ -136,32 +156,18 @@ class TicketService:
     ) -> TicketRunResult:
         if principal.role not in CREATE_TICKET_ROLES:
             raise Forbidden
-        if self.workflow is None:
-            raise TicketPilotUnavailable
-
+        self._workflow_context(principal)
         appended = await self.repository.append_message(
             principal, ticket_id, request, idempotency_key
         )
         if appended.should_run:
-            context = self._workflow_context(principal)
-            try:
-                await self.workflow.ainvoke(
-                    {
-                        "messages": [],
-                        "ticket_id": str(ticket_id),
-                        "run_id": str(appended.run_id),
-                    },
-                    config=RunnableConfig(configurable={"thread_id": appended.thread_id}),
-                    context=context,
-                )
-            except Exception as exc:
-                await context.workflow_repository.fail_run(
-                    principal.tenant_id,
-                    ticket_id,
-                    appended.run_id,
-                    type(exc).__name__,
-                )
-                raise
+            return await self._invoke_owned(
+                principal,
+                ticket_id,
+                appended.run_id,
+                appended.thread_id,
+                {"messages": [], "ticket_id": str(ticket_id), "run_id": str(appended.run_id)},
+            )
         return await self._run_result(principal, ticket_id, appended.run_id)
 
     async def get_ticket(self, principal: RequestPrincipal, ticket_id: UUID) -> TicketDetail:
@@ -186,9 +192,7 @@ class TicketService:
             ),
         )
 
-    async def get_run_events(
-        self, principal: RequestPrincipal, run_id: UUID
-    ) -> RunEventsResponse:
+    async def get_run_events(self, principal: RequestPrincipal, run_id: UUID) -> RunEventsResponse:
         if principal.role not in READ_TICKET_ROLES:
             raise Forbidden
 

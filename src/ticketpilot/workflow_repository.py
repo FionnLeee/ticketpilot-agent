@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -29,7 +29,9 @@ class WorkflowTicket:
     thread_id: str
     customer_id: str
     customer_message: str
+    action_id: UUID
     order_reference: str | None
+    pending_request: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -57,74 +59,82 @@ class TicketWorkflowRepository:
     def __init__(self, pool: BusinessPool) -> None:
         self.pool = pool
 
+    @staticmethod
+    async def _require_owner(
+        connection: BusinessConnection, tenant_id: str, ticket_id: UUID, run_id: UUID
+    ) -> None:
+        cursor = await connection.execute(
+            "SELECT active_run_id, run_started FROM ticketpilot.tickets WHERE tenant_id = %s AND id = %s FOR UPDATE",
+            (tenant_id, ticket_id),
+        )
+        row = await cursor.fetchone()
+        if row is None or row["active_run_id"] != run_id or not row["run_started"]:
+            raise StateConflict("Run no longer owns the ticket")
+
+    @staticmethod
+    async def _lock_approval_ticket(
+        connection: BusinessConnection, tenant_id: str, approval_id: UUID
+    ) -> dict[str, Any]:
+        cursor = await connection.execute(
+            """
+            SELECT t.* FROM ticketpilot.tickets AS t
+            WHERE t.tenant_id = %s AND t.id = (
+                SELECT ticket_id FROM ticketpilot.approvals WHERE tenant_id = %s AND id = %s
+            ) FOR UPDATE OF t
+            """,
+            (tenant_id, tenant_id, approval_id),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            raise ResourceNotFound("Approval")
+        return row
+
     async def begin_run(
         self, principal: RequestPrincipal, ticket_id: UUID, run_id: UUID
     ) -> WorkflowTicket:
-        if principal.role not in {
-            PrincipalRole.CUSTOMER,
-            PrincipalRole.STAFF,
-            PrincipalRole.ADMIN,
-        }:
+        if principal.role not in {PrincipalRole.CUSTOMER, PrincipalRole.STAFF, PrincipalRole.ADMIN}:
             raise Forbidden
         async with self.pool.connection() as connection, connection.transaction():
-            if principal.role is PrincipalRole.CUSTOMER:
-                cursor = await connection.execute(
-                    """
-                    SELECT t.id, t.thread_id, t.customer_id, t.status, o.order_reference,
-                           (
-                               SELECT m.content
-                               FROM ticketpilot.ticket_messages AS m
-                               WHERE m.tenant_id = t.tenant_id
-                                 AND m.ticket_id = t.id
-                                 AND m.role IN ('CUSTOMER', 'STAFF')
-                               ORDER BY m.created_at DESC, m.id DESC
-                               LIMIT 1
-                           ) AS customer_message
-                    FROM ticketpilot.tickets AS t
-                    LEFT JOIN ticketpilot.orders AS o
-                      ON o.tenant_id = t.tenant_id AND o.id = t.order_pk
-                    WHERE t.tenant_id = %s AND t.id = %s AND t.customer_id = %s
-                    FOR UPDATE OF t
-                    """,
-                    (principal.tenant_id, ticket_id, principal.actor_id),
-                )
-            else:
-                cursor = await connection.execute(
-                    """
-                    SELECT t.id, t.thread_id, t.customer_id, t.status, o.order_reference,
-                           (
-                               SELECT m.content
-                               FROM ticketpilot.ticket_messages AS m
-                               WHERE m.tenant_id = t.tenant_id
-                                 AND m.ticket_id = t.id
-                                 AND m.role IN ('CUSTOMER', 'STAFF')
-                               ORDER BY m.created_at DESC, m.id DESC
-                               LIMIT 1
-                           ) AS customer_message
-                    FROM ticketpilot.tickets AS t
-                    LEFT JOIN ticketpilot.orders AS o
-                      ON o.tenant_id = t.tenant_id AND o.id = t.order_pk
-                    WHERE t.tenant_id = %s AND t.id = %s
-                    FOR UPDATE OF t
-                    """,
-                    (principal.tenant_id, ticket_id),
-                )
+            cursor = await connection.execute(
+                """
+                SELECT t.id, t.thread_id, t.customer_id, t.status, t.pending_request,
+                       t.active_run_id, t.run_started, o.order_reference,
+                       m.id AS action_id, m.content AS customer_message
+                FROM ticketpilot.tickets AS t
+                LEFT JOIN ticketpilot.orders AS o ON o.tenant_id = t.tenant_id AND o.id = t.order_pk
+                LEFT JOIN ticketpilot.ticket_messages AS m
+                  ON m.tenant_id = t.tenant_id AND m.ticket_id = t.id
+                 AND m.id = t.trigger_message_id AND m.run_id = %s
+                 AND m.role IN ('CUSTOMER', 'STAFF')
+                WHERE t.tenant_id = %s AND t.id = %s AND (%s = false OR t.customer_id = %s)
+                FOR UPDATE OF t
+                """,
+                (
+                    run_id,
+                    principal.tenant_id,
+                    ticket_id,
+                    principal.role is PrincipalRole.CUSTOMER,
+                    principal.actor_id,
+                ),
+            )
             row = await cursor.fetchone()
             if row is None:
                 raise ResourceNotFound("Ticket")
+            if row["active_run_id"] != run_id or not row["run_started"]:
+                raise StateConflict("Run has not claimed this ticket")
             if row["status"] not in {
                 TicketStatus.NEW.value,
+                TicketStatus.WAITING_INFORMATION.value,
                 TicketStatus.RESOLVED.value,
                 TicketStatus.FAILED.value,
             }:
                 raise StateConflict(f"Ticket cannot start a run from {row['status']}")
             if not row["customer_message"]:
-                raise StateConflict("Ticket has no customer message to process")
-
+                raise StateConflict("Run has no matching trigger message")
             await connection.execute(
                 """
-                UPDATE ticketpilot.tickets
-                SET status = %s, version = version + 1, updated_at = now()
+                UPDATE ticketpilot.tickets SET status = %s, pending_request = '{}'::jsonb,
+                    version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s
                 """,
                 (TicketStatus.PROCESSING.value, principal.tenant_id, ticket_id),
@@ -136,11 +146,9 @@ class TicketWorkflowRepository:
                 run_id,
                 "RUN_STARTED",
                 AuditOutcome.STARTED,
-                actor_type=(
-                    ActorType.CUSTOMER
-                    if principal.role is PrincipalRole.CUSTOMER
-                    else ActorType.STAFF
-                ),
+                actor_type=ActorType.CUSTOMER
+                if principal.role is PrincipalRole.CUSTOMER
+                else ActorType.STAFF,
                 actor_id=principal.actor_id,
                 node_name="load_ticket_context",
             )
@@ -149,7 +157,9 @@ class TicketWorkflowRepository:
             thread_id=row["thread_id"],
             customer_id=row["customer_id"],
             customer_message=row["customer_message"],
+            action_id=row["action_id"],
             order_reference=row["order_reference"],
+            pending_request=row["pending_request"],
         )
 
     async def save_triage(
@@ -162,6 +172,7 @@ class TicketWorkflowRepository:
         risk_level: RiskLevel,
     ) -> None:
         async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, tenant_id, ticket_id, run_id)
             cursor = await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
@@ -204,6 +215,7 @@ class TicketWorkflowRepository:
         order_reference: str,
     ) -> None:
         async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, principal.tenant_id, ticket_id, run_id)
             if principal.role is PrincipalRole.CUSTOMER:
                 cursor = await connection.execute(
                     """
@@ -276,6 +288,45 @@ class TicketWorkflowRepository:
                 details={"order_reference": order_reference},
             )
 
+    async def request_information(
+        self,
+        tenant_id: str,
+        ticket_id: UUID,
+        run_id: UUID,
+        message: str,
+        pending_request: dict[str, Any],
+    ) -> None:
+        async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, tenant_id, ticket_id, run_id)
+            cursor = await connection.execute(
+                """
+                UPDATE ticketpilot.tickets
+                SET status = %s, pending_request = %s, resolution_summary = NULL,
+                    resolved_at = NULL, version = version + 1, updated_at = now()
+                WHERE tenant_id = %s AND id = %s AND status = %s
+                """,
+                (
+                    TicketStatus.WAITING_INFORMATION.value,
+                    Jsonb(pending_request),
+                    tenant_id,
+                    ticket_id,
+                    TicketStatus.PROCESSING.value,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise StateConflict("Ticket is not processing during clarification")
+            await self._append_agent_message(connection, tenant_id, ticket_id, run_id, message, [])
+            await self._append_audit(
+                connection,
+                tenant_id,
+                ticket_id,
+                run_id,
+                "TICKET_INFORMATION_REQUESTED",
+                AuditOutcome.SUCCEEDED,
+                actor_type=ActorType.AGENT,
+                node_name="finalize_ticket",
+            )
+
     async def resolve_ticket(
         self,
         tenant_id: str,
@@ -285,6 +336,7 @@ class TicketWorkflowRepository:
         citations: list[dict[str, Any]],
     ) -> None:
         async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, tenant_id, ticket_id, run_id)
             pending_cursor = await connection.execute(
                 """
                 SELECT 1 FROM ticketpilot.approvals
@@ -331,12 +383,57 @@ class TicketWorkflowRepository:
         principal: RequestPrincipal,
         ticket_id: UUID,
         run_id: UUID,
+        action_id: UUID,
         order_reference: str,
         amount: Decimal,
     ) -> PendingApproval:
         if amount <= 0:
             raise StateConflict("Refund amount must be positive")
         async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, principal.tenant_id, ticket_id, run_id)
+            action_payload = {
+                "action_id": str(action_id),
+                "order_reference": order_reference,
+                "amount": str(amount),
+            }
+            cursor = await connection.execute(
+                """
+                SELECT id, ticket_id, action_payload, status, requested_by
+                FROM ticketpilot.approvals
+                WHERE tenant_id = %s AND action_id = %s
+                FOR UPDATE
+                """,
+                (principal.tenant_id, action_id),
+            )
+            existing = await cursor.fetchone()
+            if existing is not None:
+                payload = existing["action_payload"]
+                same_action = (
+                    existing["ticket_id"] == ticket_id
+                    and existing["requested_by"] == principal.actor_id
+                    and payload.get("order_reference") == order_reference
+                    and Decimal(payload["amount"]) == amount
+                )
+                if not same_action:
+                    raise StateConflict("Refund action was replayed with different details")
+                if existing["status"] != ApprovalStatus.PENDING.value:
+                    raise StateConflict(
+                        f"Refund action is already {existing['status']}; it cannot be requested again"
+                    )
+                await self._append_audit(
+                    connection,
+                    principal.tenant_id,
+                    ticket_id,
+                    run_id,
+                    "REFUND_APPROVAL_REPLAYED",
+                    AuditOutcome.SUCCEEDED,
+                    actor_type=ActorType.AGENT,
+                    approval_id=existing["id"],
+                    node_name="create_pending_approval",
+                    details={"action_id": str(action_id)},
+                )
+                return PendingApproval(id=existing["id"], action_payload=existing["action_payload"])
+
             if principal.role is PrincipalRole.CUSTOMER:
                 cursor = await connection.execute(
                     """
@@ -380,23 +477,21 @@ class TicketWorkflowRepository:
             ):
                 raise StateConflict("Order is not eligible for the proposed refund")
 
-            idempotency_key = (
-                f"refund:{ticket_id}:{row['order_pk']}:{amount.normalize()}:{row['currency']}"
-            )
+            idempotency_key = f"refund:{action_id}"
             approval_id = uuid4()
-            action_payload = {
-                "order_id": str(row["order_pk"]),
-                "order_reference": order_reference,
-                "amount": str(amount),
-                "currency": row["currency"],
-            }
+            action_payload.update(
+                {
+                    "order_id": str(row["order_pk"]),
+                    "currency": row["currency"],
+                }
+            )
             cursor = await connection.execute(
                 """
                 INSERT INTO ticketpilot.approvals (
-                    id, tenant_id, ticket_id, run_id, action_type, action_payload,
+                    id, tenant_id, ticket_id, run_id, action_id, action_type, action_payload,
                     status, requested_by, idempotency_key
-                ) VALUES (%s, %s, %s, %s, 'REFUND', %s, %s, %s, %s)
-                ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                ) VALUES (%s, %s, %s, %s, %s, 'REFUND', %s, %s, %s, %s)
+                ON CONFLICT (tenant_id, action_id) DO NOTHING
                 RETURNING id, action_payload
                 """,
                 (
@@ -404,6 +499,7 @@ class TicketWorkflowRepository:
                     principal.tenant_id,
                     ticket_id,
                     run_id,
+                    action_id,
                     Jsonb(action_payload),
                     ApprovalStatus.PENDING.value,
                     principal.actor_id,
@@ -416,9 +512,9 @@ class TicketWorkflowRepository:
                     """
                     SELECT id, action_payload
                     FROM ticketpilot.approvals
-                    WHERE tenant_id = %s AND idempotency_key = %s
+                    WHERE tenant_id = %s AND action_id = %s
                     """,
-                    (principal.tenant_id, idempotency_key),
+                    (principal.tenant_id, action_id),
                 )
                 approval = await cursor.fetchone()
                 if approval is None:
@@ -442,7 +538,11 @@ class TicketWorkflowRepository:
                 actor_type=ActorType.AGENT,
                 approval_id=approval["id"],
                 node_name="create_pending_approval",
-                details={"amount": str(amount), "currency": row["currency"]},
+                details={
+                    "action_id": str(action_id),
+                    "amount": str(amount),
+                    "currency": row["currency"],
+                },
             )
         return PendingApproval(id=approval["id"], action_payload=approval["action_payload"])
 
@@ -462,6 +562,12 @@ class TicketWorkflowRepository:
             else ApprovalStatus.REJECTED
         )
         async with self.pool.connection() as connection, connection.transaction():
+            ticket = await self._lock_approval_ticket(connection, principal.tenant_id, approval_id)
+            if (
+                ticket["active_run_id"] is not None
+                or ticket["status"] == TicketStatus.PROCESSING.value
+            ):
+                raise StateConflict("Approval ticket already has an active run")
             cursor = await connection.execute(
                 """
                 SELECT a.status, a.ticket_id, t.thread_id, t.status AS ticket_status
@@ -482,19 +588,20 @@ class TicketWorkflowRepository:
                 and current in {ApprovalStatus.EXECUTED, ApprovalStatus.CANCELLED}
             )
             if same_final_decision:
-                should_resume = current is target and row["ticket_status"] in {
-                    TicketStatus.PROCESSING.value,
-                    TicketStatus.FAILED.value,
-                }
+                should_resume = (
+                    current is target and row["ticket_status"] == TicketStatus.FAILED.value
+                )
                 if should_resume and row["ticket_status"] == TicketStatus.FAILED.value:
                     await connection.execute(
                         """
                         UPDATE ticketpilot.tickets
-                        SET status = %s, version = version + 1, updated_at = now()
+                        SET status = %s, active_run_id = %s, trigger_message_id = NULL,
+                            run_started = false, version = version + 1, updated_at = now()
                         WHERE tenant_id = %s AND id = %s
                         """,
                         (
                             TicketStatus.PROCESSING.value,
+                            run_id,
                             principal.tenant_id,
                             row["ticket_id"],
                         ),
@@ -539,11 +646,13 @@ class TicketWorkflowRepository:
             cursor = await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = %s, version = version + 1, updated_at = now()
+                SET status = %s, active_run_id = %s, trigger_message_id = NULL,
+                    run_started = false, version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s AND status = %s
                 """,
                 (
                     TicketStatus.PROCESSING.value,
+                    run_id,
                     principal.tenant_id,
                     row["ticket_id"],
                     TicketStatus.WAITING_APPROVAL.value,
@@ -593,6 +702,8 @@ class TicketWorkflowRepository:
         self, tenant_id: str, approval_id: UUID, run_id: UUID
     ) -> RefundExecutionResult:
         async with self.pool.connection() as connection, connection.transaction():
+            ticket = await self._lock_approval_ticket(connection, tenant_id, approval_id)
+            await self._require_owner(connection, tenant_id, ticket["id"], run_id)
             cursor = await connection.execute(
                 """
                 SELECT a.status, a.ticket_id, a.action_payload, o.id AS order_id,
@@ -717,6 +828,8 @@ class TicketWorkflowRepository:
 
     async def resolve_rejected_refund(self, tenant_id: str, approval_id: UUID, run_id: UUID) -> str:
         async with self.pool.connection() as connection, connection.transaction():
+            ticket = await self._lock_approval_ticket(connection, tenant_id, approval_id)
+            await self._require_owner(connection, tenant_id, ticket["id"], run_id)
             cursor = await connection.execute(
                 """
                 SELECT ticket_id, status
@@ -769,23 +882,26 @@ class TicketWorkflowRepository:
         self, tenant_id: str, ticket_id: UUID, run_id: UUID, error_code: str
     ) -> None:
         async with self.pool.connection() as connection, connection.transaction():
-            await connection.execute(
+            cursor = await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = CASE WHEN status = %s THEN %s ELSE status END,
-                    resolution_summary = CASE WHEN status = %s THEN %s ELSE resolution_summary END,
+                SET status = CASE WHEN status = %s THEN status ELSE %s END,
+                    resolution_summary = CASE WHEN status = %s THEN resolution_summary ELSE %s END,
                     version = version + 1, updated_at = now()
-                WHERE tenant_id = %s AND id = %s
+                WHERE tenant_id = %s AND id = %s AND active_run_id = %s AND run_started
                 """,
                 (
-                    TicketStatus.PROCESSING.value,
+                    TicketStatus.WAITING_APPROVAL.value,
                     TicketStatus.FAILED.value,
-                    TicketStatus.PROCESSING.value,
+                    TicketStatus.WAITING_APPROVAL.value,
                     "Agent workflow failed; retry or staff review is required.",
                     tenant_id,
                     ticket_id,
+                    run_id,
                 ),
             )
+            if cursor.rowcount != 1:
+                return
             await self._append_audit(
                 connection,
                 tenant_id,
@@ -812,6 +928,7 @@ class TicketWorkflowRepository:
         outcome = AuditOutcome.SUCCEEDED if succeeded else AuditOutcome.FAILED
         event_type = "TOOL_SUCCEEDED" if succeeded else "TOOL_FAILED"
         async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, tenant_id, ticket_id, run_id)
             await self._append_audit(
                 connection,
                 tenant_id,

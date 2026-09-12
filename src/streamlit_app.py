@@ -108,6 +108,10 @@ async def main() -> None:
             st.stop()
     agent_client: AgentClient = st.session_state.agent_client
 
+    if agent_client.info.ticketpilot_enabled:
+        render_ticketpilot_console(agent_client.base_url)
+        return
+
     # Initialize voice manager (once per session)
     if "voice_manager" not in st.session_state:
         st.session_state.voice_manager = VoiceManager.from_env()

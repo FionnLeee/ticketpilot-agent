@@ -50,9 +50,7 @@ def _render_ticket(ticket: dict[str, Any]) -> None:
     status.metric("状态", ticket.get("status", "-"))
     category.metric("分类", ticket.get("category") or "-")
     risk.metric("风险", ticket.get("risk_level") or "-")
-    st.caption(
-        f"Ticket `{ticket.get('id', '-')}` · Thread `{ticket.get('thread_id', '-')}`"
-    )
+    st.caption(f"Ticket `{ticket.get('id', '-')}` · Thread `{ticket.get('thread_id', '-')}`")
     st.write(ticket.get("subject", ""))
 
     order = ticket.get("order")
@@ -89,8 +87,7 @@ def _render_events(events_response: dict[str, Any]) -> None:
         outcome = event.get("outcome", "UNKNOWN")
         with st.container(border=True):
             st.markdown(
-                f"{icons.get(outcome, '•')} **{event.get('event_type', 'UNKNOWN')}** "
-                f"`{outcome}`"
+                f"{icons.get(outcome, '•')} **{event.get('event_type', 'UNKNOWN')}** `{outcome}`"
             )
             context = [event.get("occurred_at")]
             if event.get("node_name"):
@@ -165,7 +162,7 @@ def _render_message_form(
     token: str,
     ticket: dict[str, Any],
 ) -> None:
-    if ticket.get("status") not in {"RESOLVED", "FAILED"}:
+    if ticket.get("status") not in {"RESOLVED", "FAILED", "WAITING_INFORMATION"}:
         return
     with st.expander("向当前工单追加消息"):
         message = st.text_area("追加问题", key="ticketpilot_followup_message")
@@ -223,11 +220,16 @@ def render_ticketpilot_console(base_url: str) -> None:
             placeholder="O-DEMO-0001",
             key="ticketpilot_order_reference",
         )
+        idempotency_key = st.text_input(
+            "创建请求 Idempotency-Key",
+            key="ticketpilot_create_idempotency_key",
+            help="超时重试时复用原键；创建新工单时使用新键。",
+        )
         if st.button("创建并运行", key="ticketpilot_create", type="primary"):
             if not viewer_token:
                 st.error("请先填写操作令牌。")
-            elif not subject or not message:
-                st.error("主题和问题不能为空。")
+            elif not subject or not message or not idempotency_key:
+                st.error("主题、问题和创建请求 Idempotency-Key 均不能为空。")
             else:
                 try:
                     with st.spinner("创建工单并执行 TicketPilot graph..."):
@@ -235,6 +237,7 @@ def render_ticketpilot_console(base_url: str) -> None:
                             viewer_token,
                             subject=subject,
                             message=message,
+                            idempotency_key=idempotency_key,
                             order_reference=order_reference or None,
                         )
                         _remember_run_result(result)

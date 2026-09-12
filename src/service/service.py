@@ -7,7 +7,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from fastapi.routing import APIRoute
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -91,7 +91,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             store = await stack.enter_async_context(initialize_store())
             app.state.ticketpilot_pool = None
             app.state.ticketpilot_graph = None
-            if settings.TICKETPILOT_ENABLED:
+            ticketpilot_enabled = getattr(
+                app.state, "ticketpilot_enabled", settings.TICKETPILOT_ENABLED
+            )
+            if ticketpilot_enabled:
                 if settings.DATABASE_TYPE != DatabaseType.POSTGRES:
                     raise ValueError("TicketPilot requires DATABASE_TYPE=postgres")
                 business_pool = await stack.enter_async_context(get_ticketpilot_pool())
@@ -110,12 +113,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
             if not settings.AUTH_SECRET:
                 logger.warning(
-                    "AUTH_SECRET is not configured — all API endpoints are unauthenticated. "
+                    "AUTH_SECRET is not configured — generic API bearer authentication is disabled. "
+                    "TicketPilot business endpoints still require their own tokens. "
                     "Set AUTH_SECRET in your environment to enable bearer token authentication."
                 )
 
             # Configure agents with both memory components and async loading
-            agents = get_all_agent_info()
+            agents = [] if ticketpilot_enabled else get_all_agent_info()
             for a in agents:
                 try:
                     await load_agent(a.key)
@@ -138,21 +142,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.ticketpilot_graph = None
 
 
-app = FastAPI(lifespan=lifespan, generate_unique_id_function=custom_generate_unique_id)
 router = APIRouter(dependencies=[Depends(verify_bearer)])
+metadata_router = APIRouter(dependencies=[Depends(verify_bearer)])
 # AG-UI protocol endpoints inherit the same bearer auth - see service/agui.py
 router.include_router(agui_router)
 
 
-@router.get("/info")
-async def info() -> ServiceMetadata:
+@metadata_router.get("/info")
+async def info(request: Request) -> ServiceMetadata:
     models = list(settings.AVAILABLE_MODELS)
     models.sort()
     return ServiceMetadata(
-        agents=get_all_agent_info(),
+        agents=[] if request.app.state.ticketpilot_enabled else get_all_agent_info(),
         models=models,
         default_agent=DEFAULT_AGENT,
         default_model=settings.DEFAULT_MODEL,
+        ticketpilot_enabled=request.app.state.ticketpilot_enabled,
     )
 
 
@@ -494,7 +499,6 @@ async def threads(
     return UserThreads(threads=summaries)
 
 
-@app.get("/health")
 async def health_check():
     """Health check endpoint."""
 
@@ -511,5 +515,15 @@ async def health_check():
     return health_status
 
 
-app.include_router(router)
-install_ticketpilot_api(app)
+def create_app() -> FastAPI:
+    application = FastAPI(lifespan=lifespan, generate_unique_id_function=custom_generate_unique_id)
+    application.state.ticketpilot_enabled = settings.TICKETPILOT_ENABLED
+    application.include_router(metadata_router)
+    application.add_api_route("/health", health_check, methods=["GET"])
+    if not application.state.ticketpilot_enabled:
+        application.include_router(router)
+    install_ticketpilot_api(application)
+    return application
+
+
+app = create_app()

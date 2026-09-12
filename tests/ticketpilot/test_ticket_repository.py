@@ -6,7 +6,7 @@ import pytest
 
 from ticketpilot.db import apply_migrations, get_ticketpilot_pool
 from ticketpilot.domain import PrincipalRole, TicketStatus
-from ticketpilot.errors import ResourceNotFound
+from ticketpilot.errors import ResourceNotFound, StateConflict
 from ticketpilot.repositories import TicketRepository
 from ticketpilot.schemas import CreateTicketRequest, RequestPrincipal
 from ticketpilot.services import TicketService
@@ -33,6 +33,7 @@ async def test_ticket_create_and_get_are_atomic_and_tenant_scoped() -> None:
         created = await service.create_ticket(
             customer,
             CreateTicketRequest(subject="普通咨询", message="请问退货期限？"),
+            "create-atomic",
         )
 
         assert created.ticket.status is TicketStatus.NEW
@@ -80,6 +81,67 @@ async def test_ticket_create_and_get_are_atomic_and_tenant_scoped() -> None:
 
 @pytest.mark.docker
 @pytest.mark.asyncio
+async def test_create_request_idempotency_distinguishes_retry_from_new_request() -> None:
+    tenant_id = f"tenant-{uuid4()}"
+    customer = RequestPrincipal(
+        tenant_id=tenant_id,
+        actor_id="customer-a",
+        role=PrincipalRole.CUSTOMER,
+    )
+    other_customer = customer.model_copy(update={"actor_id": "customer-b"})
+    request = CreateTicketRequest(subject=" 普通咨询 ", message=" 请问退货期限？ ")
+
+    async with get_ticketpilot_pool() as pool:
+        await apply_migrations(pool)
+        service = TicketService(TicketRepository(pool))
+        first, concurrent_retry = await asyncio.gather(
+            service.create_ticket(customer, request, "same-create-attempt"),
+            service.create_ticket(customer, request, "same-create-attempt"),
+        )
+        normalized_retry = await service.create_ticket(
+            customer,
+            CreateTicketRequest(subject="普通咨询", message="请问退货期限？"),
+            "same-create-attempt",
+        )
+
+        assert first.ticket.id == concurrent_retry.ticket.id == normalized_retry.ticket.id
+        assert first.run_id == concurrent_retry.run_id == normalized_retry.run_id
+
+        with pytest.raises(StateConflict, match="different ticket request"):
+            await service.create_ticket(
+                customer,
+                CreateTicketRequest(subject="普通咨询", message="换了正文"),
+                "same-create-attempt",
+            )
+
+        new_request = await service.create_ticket(customer, request, "new-create-attempt")
+        other_actor = await service.create_ticket(other_customer, request, "same-create-attempt")
+        assert len({first.ticket.id, new_request.ticket.id, other_actor.ticket.id}) == 3
+
+        async with pool.connection() as connection:
+            cursor = await connection.execute(
+                """
+                SELECT
+                    (SELECT count(*) FROM ticketpilot.tickets WHERE tenant_id = %s) AS tickets,
+                    (SELECT count(*) FROM ticketpilot.ticket_messages WHERE tenant_id = %s) AS messages,
+                    (SELECT count(*) FROM ticketpilot.audit_events WHERE tenant_id = %s) AS events
+                """,
+                (tenant_id, tenant_id, tenant_id),
+            )
+            assert await cursor.fetchone() == {"tickets": 3, "messages": 3, "events": 3}
+            await connection.execute(
+                "DELETE FROM ticketpilot.audit_events WHERE tenant_id = %s", (tenant_id,)
+            )
+            await connection.execute(
+                "DELETE FROM ticketpilot.ticket_messages WHERE tenant_id = %s", (tenant_id,)
+            )
+            await connection.execute(
+                "DELETE FROM ticketpilot.tickets WHERE tenant_id = %s", (tenant_id,)
+            )
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
 async def test_explicit_order_reference_requires_customer_ownership() -> None:
     tenant_id = f"tenant-{uuid4()}"
     order_id = uuid4()
@@ -122,9 +184,9 @@ async def test_explicit_order_reference_requires_customer_ownership() -> None:
             order_reference=order_reference,
         )
         with pytest.raises(ResourceNotFound):
-            await service.create_ticket(other_customer, request)
+            await service.create_ticket(other_customer, request, "create-other-customer")
 
-        created = await service.create_ticket(owner, request)
+        created = await service.create_ticket(owner, request, "create-owner")
         detail = await service.get_ticket(owner, created.ticket.id)
         assert detail.order is not None
         assert detail.order.order_reference == order_reference

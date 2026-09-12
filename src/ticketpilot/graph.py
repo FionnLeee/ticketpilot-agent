@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from time import time
@@ -19,17 +20,16 @@ from ticketpilot.domain import (
     RiskLevel,
     TicketCategory,
 )
-from ticketpilot.reasoning import TicketReasoner
+from ticketpilot.reasoning import ORDER_REFERENCE_PATTERN, TicketReasoner
 from ticketpilot.schemas import Citation, TicketClassification
 from ticketpilot.tools import TicketPilotContext, query_order, search_policy
 from ticketpilot.workflow_repository import TicketWorkflowRepository
-
-REFUND_TERMS = ("退款", "退钱", "退费", "refund")
 
 
 class TicketAgentState(MessagesState, total=False):
     ticket_id: str
     run_id: str
+    action_id: str
     customer_message: str
     order_reference: str | None
     classification: dict[str, Any]
@@ -42,6 +42,9 @@ class TicketAgentState(MessagesState, total=False):
     approval_id: str
     resume_payload: Any
     final_answer: str
+    pending_request: dict[str, Any]
+    clarification: str
+    order_conflict: bool
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,7 +53,9 @@ class TicketGraphContext(TicketPilotContext):
     reasoner: TicketReasoner
 
 
-def _required_uuid(state: TicketAgentState, key: Literal["ticket_id", "run_id"]) -> UUID:
+def _required_uuid(
+    state: TicketAgentState, key: Literal["ticket_id", "run_id", "action_id"]
+) -> UUID:
     value = cast(str | None, state.get(key))
     if not value:
         raise ValueError(f"Ticket graph requires {key}")
@@ -80,8 +85,15 @@ async def load_ticket_context(
     )
     return {
         "customer_message": ticket.customer_message,
+        "action_id": str(ticket.action_id),
         "order_reference": ticket.order_reference,
         "messages": [HumanMessage(content=ticket.customer_message)],
+        "pending_request": ticket.pending_request,
+        "clarification": "",
+        "order_conflict": False,
+        "order_result": {},
+        "policy_result": {},
+        "proposed_refund_amount": "",
     }
 
 
@@ -91,16 +103,45 @@ async def classify_request(
 ) -> dict[str, Any]:
     config: RunnableConfig = get_config()
     message = state["customer_message"]
-    classification = await runtime.context.reasoner.classify(
-        message, state.get("order_reference"), config
-    )
+    classification: TicketClassification | None = None
+    pending = state.get("pending_request") or {}
+    slot_text = re.sub(r"^(?:订单号|订单)(?:是|为)?[:：]?\s*", "", message.strip()).strip(" 。.!！")
+    order_slot = ORDER_REFERENCE_PATTERN.fullmatch(slot_text)
+    amount_slot = re.fullmatch(r"(\d+(?:\.\d{1,2})?)\s*(?:元|块|CNY)?", slot_text)
+    if pending and (order_slot or (amount_slot and Decimal(amount_slot.group(1)) > 0)):
+        previous = TicketClassification.model_validate(pending)
+        if previous.category is TicketCategory.REFUND:
+            updates: dict[str, Any] = {}
+            if order_slot:
+                updates["order_reference"] = order_slot.group(0)
+            elif amount_slot and Decimal(amount_slot.group(1)) > 0:
+                updates["requested_refund_amount"] = Decimal(amount_slot.group(1))
+                updates["full_refund_requested"] = False
+            classification = TicketClassification.model_validate(
+                {**previous.model_dump(), **updates}
+            )
+    if classification is None:
+        classification = await runtime.context.reasoner.classify(
+            message, state.get("order_reference"), config
+        )
     category = classification.category
-    if any(term in message.casefold() for term in REFUND_TERMS):
-        category = TicketCategory.REFUND
     risk_level = (
         RiskLevel.HIGH_RISK_WRITE if category is TicketCategory.REFUND else RiskLevel.READ_ONLY
     )
     order_reference = state.get("order_reference") or classification.order_reference
+    explicit_references = {
+        match.group(0).casefold() for match in ORDER_REFERENCE_PATTERN.finditer(message)
+    }
+    candidates = explicit_references | (
+        {classification.order_reference.casefold()} if classification.order_reference else set()
+    )
+    conflict = (
+        bool(
+            state.get("order_reference")
+            and any(candidate != state["order_reference"].casefold() for candidate in candidates)
+        )
+        or len(explicit_references) > 1
+    )
     trusted_classification = classification.model_copy(
         update={"category": category, "order_reference": order_reference}
     )
@@ -116,10 +157,18 @@ async def classify_request(
         "classification": trusted_classification.model_dump(mode="json"),
         "risk_level": risk_level.value,
         "order_reference": order_reference,
+        "clarification": (
+            "一个工单只能处理一个订单。请为新订单创建工单；本轮没有查询或修改订单。"
+            if conflict
+            else ""
+        ),
+        "order_conflict": conflict,
     }
 
 
-def route_after_classification(state: TicketAgentState) -> Literal["order", "policy"]:
+def route_after_classification(state: TicketAgentState) -> Literal["order", "policy", "clarify"]:
+    if state.get("clarification"):
+        return "clarify"
     return "order" if state.get("order_reference") else "policy"
 
 
@@ -141,7 +190,7 @@ def prepare_order_call(state: TicketAgentState) -> dict[str, Any]:
                     }
                 ],
             )
-        ]
+        ],
     }
 
 
@@ -187,7 +236,7 @@ def prepare_policy_call(state: TicketAgentState) -> dict[str, Any]:
                     }
                 ],
             )
-        ]
+        ],
     }
 
 
@@ -223,12 +272,33 @@ def _elapsed_ms(started_at: float | None) -> int:
 def plan_work(state: TicketAgentState) -> dict[str, Any]:
     classification = TicketClassification.model_validate(state["classification"])
     order_result = state.get("order_result")
+    if classification.category in {
+        TicketCategory.REFUND,
+        TicketCategory.ORDER_STATUS,
+    } and not state.get("order_reference"):
+        return {
+            "proposed_refund_amount": "",
+            "clarification": "请提供需要处理的订单号，我不会猜测订单信息。",
+        }
     if classification.category is not TicketCategory.REFUND or not order_result:
         return {"proposed_refund_amount": ""}
     if not order_result.get("found") or not order_result.get("order"):
         return {"proposed_refund_amount": ""}
     refundable = Decimal(order_result["order"]["refundable_amount"])
-    requested = classification.requested_refund_amount or refundable
+    requested = classification.requested_refund_amount
+    if requested is None:
+        if classification.full_refund_requested:
+            requested = refundable
+        else:
+            return {
+                "proposed_refund_amount": "",
+                "clarification": "请明确需要退款的金额，或明确申请全额退款；目前没有创建退款审批。",
+            }
+    if classification.full_refund_requested and requested != refundable:
+        return {
+            "proposed_refund_amount": "",
+            "clarification": "申请金额与全额退款不一致，请明确金额或重新申请全额退款。",
+        }
     if requested <= 0 or requested > refundable:
         return {"proposed_refund_amount": ""}
     return {"proposed_refund_amount": str(requested)}
@@ -248,6 +318,9 @@ async def generate_grounded_answer(
     runtime: Runtime[TicketGraphContext],
 ) -> dict[str, Any]:
     config: RunnableConfig = get_config()
+    if state.get("clarification"):
+        answer = state["clarification"]
+        return {"final_answer": answer, "messages": [AIMessage(content=answer)]}
     classification = TicketClassification.model_validate(state["classification"])
     order_result = state.get("order_result")
     if classification.category in {TicketCategory.ORDER_STATUS, TicketCategory.REFUND}:
@@ -279,6 +352,22 @@ async def generate_grounded_answer(
 async def finalize_ticket(
     state: TicketAgentState, runtime: Runtime[TicketGraphContext]
 ) -> dict[str, Any]:
+    if state.get("clarification"):
+        pending = (
+            state["classification"]
+            if state["classification"]["category"] == TicketCategory.REFUND.value
+            else {}
+        )
+        if state.get("order_conflict"):
+            pending = {}
+        await runtime.context.workflow_repository.request_information(
+            runtime.context.principal.tenant_id,
+            _required_uuid(state, "ticket_id"),
+            _required_uuid(state, "run_id"),
+            state["final_answer"],
+            pending,
+        )
+        return {}
     citations = [item.model_dump(mode="json") for item in _policy_evidence(state)]
     await runtime.context.workflow_repository.resolve_ticket(
         runtime.context.principal.tenant_id,
@@ -300,6 +389,7 @@ async def create_pending_approval(
         runtime.context.principal,
         _required_uuid(state, "ticket_id"),
         _required_uuid(state, "run_id"),
+        _required_uuid(state, "action_id"),
         order_reference,
         Decimal(state["proposed_refund_amount"]),
     )
@@ -383,7 +473,11 @@ def build_ticketpilot_graph(checkpointer: BaseCheckpointSaver[Any] | None = None
     builder.add_conditional_edges(
         "classify_request",
         route_after_classification,
-        {"order": "prepare_order_call", "policy": "prepare_policy_call"},
+        {
+            "order": "prepare_order_call",
+            "policy": "prepare_policy_call",
+            "clarify": "generate_grounded_answer",
+        },
     )
     builder.add_edge("prepare_order_call", "query_order")
     builder.add_edge("query_order", "capture_order_result")

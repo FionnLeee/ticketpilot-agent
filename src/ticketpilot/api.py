@@ -73,8 +73,12 @@ async def create_ticket(
     payload: CreateTicketRequest,
     principal: Annotated[RequestPrincipal, Depends(get_request_principal)],
     service: Annotated[TicketService, Depends(get_ticket_service)],
+    idempotency_key: Annotated[
+        str,
+        Header(alias="Idempotency-Key", min_length=1, max_length=128),
+    ],
 ) -> TicketRunResult:
-    return await service.create_ticket(principal, payload)
+    return await service.create_ticket(principal, payload, idempotency_key)
 
 
 @router.get(

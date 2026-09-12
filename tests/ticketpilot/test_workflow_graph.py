@@ -21,6 +21,7 @@ from ticketpilot.errors import Forbidden, ResourceNotFound, StateConflict
 from ticketpilot.graph import build_ticketpilot_graph
 from ticketpilot.orders import PostgresOrderRepository
 from ticketpilot.policies import LocalPolicyRetriever
+from ticketpilot.reasoning import DeterministicDemoReasoner
 from ticketpilot.repositories import TicketRepository
 from ticketpilot.schemas import (
     AddTicketMessageRequest,
@@ -37,6 +38,177 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
+@pytest.mark.docker
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message,expected_status",
+    [
+        ("我不需要退款，只想知道物流", TicketStatus.RESOLVED),
+        ("退款规则是什么？我只是咨询", TicketStatus.RESOLVED),
+        ("我想退一部分", TicketStatus.WAITING_INFORMATION),
+    ],
+)
+async def test_refund_counterexamples_never_create_approvals(message, expected_status):
+    tenant = f"intent-{uuid4()}"
+    principal = make_principal(tenant, PrincipalRole.CUSTOMER, "customer-a")
+    reference = f"O-{uuid4()}"
+    async with get_ticketpilot_pool() as pool:
+        await apply_migrations(pool)
+        order_id = await insert_order(pool, tenant, principal.actor_id, reference)
+        try:
+            service = make_service(pool, build_ticketpilot_graph(MemorySaver()))
+            service.reasoner = DeterministicDemoReasoner()
+            result = await service.create_ticket(
+                principal,
+                CreateTicketRequest(
+                    subject="意图验收",
+                    message=message,
+                    order_reference=reference,
+                ),
+                f"create-{uuid4()}",
+            )
+            assert result.ticket.status is expected_status
+            assert result.pending_approval is None
+            if "只是咨询" in message:
+                assert "政策依据" in result.latest_message.content
+            async with pool.connection() as connection:
+                cursor = await connection.execute(
+                    "SELECT count(*) AS count FROM ticketpilot.approvals WHERE tenant_id = %s",
+                    (tenant,),
+                )
+                assert (await cursor.fetchone())["count"] == 0
+                cursor = await connection.execute(
+                    "SELECT refundable_amount FROM ticketpilot.orders WHERE id = %s",
+                    (order_id,),
+                )
+                assert (await cursor.fetchone())["refundable_amount"] == Decimal("399")
+            if expected_status is TicketStatus.WAITING_INFORMATION:
+                detail = await service.get_ticket(principal, result.ticket.id)
+                assert detail.resolution_summary is None
+                assert "明确" in result.latest_message.content
+                request = AddTicketMessageRequest(message="我想退一部分")
+                first = await service.add_message(principal, result.ticket.id, request, "clarify")
+                before = await service.get_run_events(principal, first.run_id)
+                repeated = await service.add_message(
+                    principal, result.ticket.id, request, "clarify"
+                )
+                after = await service.get_run_events(principal, first.run_id)
+                assert repeated.run_id == first.run_id
+                assert repeated.ticket.status is TicketStatus.WAITING_INFORMATION
+                assert before == after
+        finally:
+            await cleanup_tenant(pool, tenant)
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "initial,linked,reply,amount",
+    [
+        ("我要退款100元", False, "order", "100"),
+        ("我要全额退款", False, "order", "399"),
+        ("我想退一部分", True, "100元", "100"),
+    ],
+)
+async def test_pending_refund_survives_new_graph_and_only_fills_explicit_slots(
+    initial, linked, reply, amount
+):
+    tenant = f"slots-{uuid4()}"
+    principal = make_principal(tenant, PrincipalRole.CUSTOMER, "customer-a")
+    reference = f"O-{uuid4()}"
+    async with get_ticketpilot_pool() as pool:
+        await apply_migrations(pool)
+        await insert_order(pool, tenant, principal.actor_id, reference)
+        try:
+            service = make_service(pool, build_ticketpilot_graph(MemorySaver()))
+            service.reasoner = DeterministicDemoReasoner()
+            initial_result = await service.create_ticket(
+                principal,
+                CreateTicketRequest(
+                    subject="补充信息",
+                    message=initial,
+                    order_reference=reference if linked else None,
+                ),
+                f"create-{uuid4()}",
+            )
+            assert initial_result.ticket.status is TicketStatus.WAITING_INFORMATION
+            service = make_service(pool, build_ticketpilot_graph(MemorySaver()))
+            service.reasoner = DeterministicDemoReasoner()
+            result = await service.add_message(
+                principal,
+                initial_result.ticket.id,
+                AddTicketMessageRequest(message=reference if reply == "order" else reply),
+                "fill-slot",
+            )
+            assert result.ticket.status is TicketStatus.WAITING_APPROVAL
+            assert Decimal(result.pending_approval.action_payload["amount"]) == Decimal(amount)
+            async with pool.connection() as connection:
+                cursor = await connection.execute(
+                    "SELECT refundable_amount FROM ticketpilot.orders WHERE tenant_id = %s",
+                    (tenant,),
+                )
+                assert (await cursor.fetchone())["refundable_amount"] == Decimal("399")
+        finally:
+            await cleanup_tenant(pool, tenant)
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
+async def test_cancelled_pending_refund_is_not_reused_and_order_conflict_skips_tools():
+    tenant = f"cancel-{uuid4()}"
+    principal = make_principal(tenant, PrincipalRole.CUSTOMER, "customer-a")
+    reference = f"O-{uuid4()}"
+    other_reference = f"O-{uuid4()}"
+    async with get_ticketpilot_pool() as pool:
+        await apply_migrations(pool)
+        await insert_order(pool, tenant, principal.actor_id, reference)
+        await insert_order(pool, tenant, principal.actor_id, other_reference)
+        try:
+            service = make_service(pool, build_ticketpilot_graph(MemorySaver()))
+            service.reasoner = DeterministicDemoReasoner()
+            created = await service.create_ticket(
+                principal,
+                CreateTicketRequest(
+                    subject="取消后补订单",
+                    message="我要退款100元",
+                ),
+                f"create-{uuid4()}",
+            )
+            await service.add_message(
+                principal,
+                created.ticket.id,
+                AddTicketMessageRequest(message="算了，不退了"),
+                "cancel",
+            )
+            supplied = await service.add_message(
+                principal,
+                created.ticket.id,
+                AddTicketMessageRequest(message=reference),
+                "supply-after-cancel",
+            )
+            assert supplied.pending_approval is None
+            assert supplied.ticket.category is TicketCategory.ORDER_STATUS
+            conflict = await service.add_message(
+                principal,
+                created.ticket.id,
+                AddTicketMessageRequest(message=f"这次查询 {other_reference} 的物流"),
+                "different-order",
+            )
+            assert conflict.ticket.status is TicketStatus.WAITING_INFORMATION
+            assert conflict.ticket.order_reference == reference
+            assert "新订单创建工单" in conflict.latest_message.content
+            events = await service.get_run_events(principal, conflict.run_id)
+            assert not any(event.tool_name for event in events.events)
+            async with pool.connection() as connection:
+                cursor = await connection.execute(
+                    "SELECT count(*) AS count FROM ticketpilot.approvals WHERE tenant_id = %s",
+                    (tenant,),
+                )
+                assert (await cursor.fetchone())["count"] == 0
+        finally:
+            await cleanup_tenant(pool, tenant)
+
+
 class FakeReasoner:
     async def classify(
         self,
@@ -48,7 +220,7 @@ class FakeReasoner:
         order_reference = known_order_reference or (extracted.group(0) if extracted else None)
         if "退款" in message:
             return TicketClassification(
-                category=TicketCategory.OTHER,
+                category=TicketCategory.REFUND,
                 priority=TicketPriority.HIGH,
                 order_reference=order_reference,
                 requested_refund_amount=Decimal("100.00"),
@@ -86,9 +258,7 @@ class FailingReasoner(FakeReasoner):
 
 
 class TimeoutOrderReader:
-    async def get_by_reference(
-        self, principal: RequestPrincipal, order_reference: str
-    ):
+    async def get_by_reference(self, principal: RequestPrincipal, order_reference: str):
         raise TimeoutError
 
 
@@ -167,6 +337,7 @@ async def test_day11_normal_order_flow_is_grounded_and_resolved() -> None:
                     message="我的物流什么时候送达？",
                     order_reference=order_reference,
                 ),
+                f"create-{uuid4()}",
             )
             detail = await service.get_ticket(customer, result.ticket.id)
             events = await service.get_run_events(customer, result.run_id)
@@ -212,6 +383,7 @@ async def test_day14_add_message_reuses_thread_and_is_idempotent() -> None:
                     message="我的物流什么时候送达？",
                     order_reference=order_reference,
                 ),
+                f"create-{uuid4()}",
             )
             thread_id = initial.ticket.thread_id
             follow_up = await service.add_message(
@@ -316,6 +488,7 @@ async def test_day14_order_timeout_is_audited_and_fails_closed() -> None:
                     message="查询订单物流",
                     order_reference=order_reference,
                 ),
+                f"create-{uuid4()}",
             )
             thread_id = result.ticket.thread_id
             events = await service.get_run_events(customer, result.run_id)
@@ -359,6 +532,7 @@ async def test_day14_unhandled_reasoner_failure_marks_ticket_failed() -> None:
                         message="查询订单物流",
                         order_reference=order_reference,
                     ),
+                    f"create-{uuid4()}",
                 )
             async with pool.connection() as connection:
                 cursor = await connection.execute(
@@ -409,6 +583,7 @@ async def test_day11_model_extracted_order_is_authorized_before_linking() -> Non
                     subject="查询物流",
                     message=f"请查询订单 {order_reference} 的物流",
                 ),
+                f"create-{uuid4()}",
             )
             thread_id = result.ticket.thread_id
             async with pool.connection() as connection:
@@ -452,6 +627,7 @@ async def test_day12_postgres_checkpoint_resume_and_refund_idempotency() -> None
                         message="请给这个订单退款 100 元",
                         order_reference=order_reference,
                     ),
+                    f"create-{uuid4()}",
                 )
                 thread_id = pending.ticket.thread_id
                 assert pending.ticket.status is TicketStatus.WAITING_APPROVAL
@@ -527,15 +703,9 @@ async def test_day12_postgres_checkpoint_resume_and_refund_idempotency() -> None
                         reason="重复批准",
                     ),
                 )
-                initial_events = await restarted_service.get_run_events(
-                    customer, pending.run_id
-                )
-                approval_events = await restarted_service.get_run_events(
-                    approver, approved.run_id
-                )
-                replay_events = await restarted_service.get_run_events(
-                    approver, repeated.run_id
-                )
+                initial_events = await restarted_service.get_run_events(customer, pending.run_id)
+                approval_events = await restarted_service.get_run_events(approver, approved.run_id)
+                replay_events = await restarted_service.get_run_events(approver, repeated.run_id)
                 with pytest.raises(StateConflict):
                     await restarted_service.decide_approval(
                         approver,
@@ -600,6 +770,159 @@ async def test_day12_postgres_checkpoint_resume_and_refund_idempotency() -> None
 
 @pytest.mark.docker
 @pytest.mark.asyncio
+async def test_refund_action_id_distinguishes_retry_from_same_amount_new_intent() -> None:
+    tenant_id = f"tenant-{uuid4()}"
+    customer = make_principal(tenant_id, PrincipalRole.CUSTOMER, "customer-a")
+    approver = make_principal(tenant_id, PrincipalRole.APPROVER, "approver-a")
+    order_reference = f"O-{uuid4()}"
+    saver = MemorySaver()
+    thread_id = ""
+
+    async with get_ticketpilot_pool() as pool:
+        await apply_migrations(pool)
+        order_id = await insert_order(pool, tenant_id, customer.actor_id, order_reference)
+        try:
+            service = make_service(pool, build_ticketpilot_graph(saver))
+            request = CreateTicketRequest(
+                subject="两次退款",
+                message="我要退款 100 元",
+                order_reference=order_reference,
+            )
+            first = await service.create_ticket(customer, request, "create-refund-attempt")
+            retried_create = await service.create_ticket(customer, request, "create-refund-attempt")
+            thread_id = first.ticket.thread_id
+
+            assert first.ticket.id == retried_create.ticket.id
+            assert first.run_id == retried_create.run_id
+            assert first.pending_approval is not None
+            assert retried_create.pending_approval is not None
+            assert first.pending_approval.id == retried_create.pending_approval.id
+
+            async with pool.connection() as connection:
+                cursor = await connection.execute(
+                    """
+                    SELECT action_id
+                    FROM ticketpilot.approvals
+                    WHERE tenant_id = %s AND id = %s
+                    """,
+                    (tenant_id, first.pending_approval.id),
+                )
+                first_action_id = (await cursor.fetchone())["action_id"]
+                await connection.execute(
+                    """
+                    UPDATE ticketpilot.tickets
+                    SET active_run_id = %s, run_started = true
+                    WHERE tenant_id = %s AND id = %s
+                    """,
+                    (first.run_id, tenant_id, first.ticket.id),
+                )
+            assert service.workflow_repository is not None
+            replayed_action = await service.workflow_repository.create_pending_refund(
+                customer,
+                first.ticket.id,
+                first.run_id,
+                first_action_id,
+                order_reference,
+                Decimal("100"),
+            )
+            await service.repository.release_run(tenant_id, first.ticket.id, first.run_id)
+            assert replayed_action.id == first.pending_approval.id
+
+            first_approved = await service.decide_approval(
+                approver,
+                first.pending_approval.id,
+                ApprovalDecisionRequest(
+                    decision=ApprovalDecision.APPROVE,
+                    reason="第一次申请通过",
+                ),
+            )
+            assert first_approved.ticket.status is TicketStatus.RESOLVED
+
+            second = await service.add_message(
+                customer,
+                first.ticket.id,
+                AddTicketMessageRequest(message="我要退款 100 元"),
+                "second-refund-attempt",
+            )
+            retried_second = await service.add_message(
+                customer,
+                first.ticket.id,
+                AddTicketMessageRequest(message="我要退款 100 元"),
+                "second-refund-attempt",
+            )
+
+            assert second.run_id == retried_second.run_id
+            assert second.pending_approval is not None
+            assert retried_second.pending_approval is not None
+            assert second.pending_approval.id == retried_second.pending_approval.id
+            assert second.pending_approval.id != first.pending_approval.id
+
+            second_approved = await service.decide_approval(
+                approver,
+                second.pending_approval.id,
+                ApprovalDecisionRequest(
+                    decision=ApprovalDecision.APPROVE,
+                    reason="第二次独立申请通过",
+                ),
+            )
+            assert second_approved.ticket.status is TicketStatus.RESOLVED
+
+            async with pool.connection() as connection:
+                cursor = await connection.execute(
+                    """
+                    SELECT payment_status, refundable_amount
+                    FROM ticketpilot.orders
+                    WHERE tenant_id = %s AND id = %s
+                    """,
+                    (tenant_id, order_id),
+                )
+                order = await cursor.fetchone()
+                cursor = await connection.execute(
+                    """
+                    SELECT id, action_id, action_payload, status
+                    FROM ticketpilot.approvals
+                    WHERE tenant_id = %s AND ticket_id = %s
+                    ORDER BY requested_at, id
+                    """,
+                    (tenant_id, first.ticket.id),
+                )
+                approvals = list(await cursor.fetchall())
+                cursor = await connection.execute(
+                    """
+                    SELECT
+                        count(*) FILTER (
+                            WHERE event_type = 'REFUND_EXECUTED'
+                        ) AS executions,
+                        count(*) FILTER (
+                            WHERE event_type = 'REFUND_APPROVAL_REPLAYED'
+                        ) AS action_replays
+                    FROM ticketpilot.audit_events
+                    WHERE tenant_id = %s AND ticket_id = %s
+                    """,
+                    (tenant_id, first.ticket.id),
+                )
+                event_counts = await cursor.fetchone()
+
+            assert order == {
+                "payment_status": "PARTIALLY_REFUNDED",
+                "refundable_amount": Decimal("199.00"),
+            }
+            assert len(approvals) == 2
+            assert len({approval["action_id"] for approval in approvals}) == 2
+            assert all(approval["status"] == "EXECUTED" for approval in approvals)
+            assert all(
+                Decimal(approval["action_payload"]["amount"]) == Decimal("100")
+                for approval in approvals
+            )
+            assert event_counts == {"executions": 2, "action_replays": 1}
+        finally:
+            if thread_id:
+                await saver.adelete_thread(thread_id)
+            await cleanup_tenant(pool, tenant_id)
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
 async def test_day12_revalidates_order_after_approval() -> None:
     tenant_id = f"tenant-{uuid4()}"
     customer = make_principal(tenant_id, PrincipalRole.CUSTOMER, "customer-a")
@@ -619,6 +942,7 @@ async def test_day12_revalidates_order_after_approval() -> None:
                     message="我要退款 100 元",
                     order_reference=order_reference,
                 ),
+                f"create-{uuid4()}",
             )
             thread_id = pending.ticket.thread_id
             assert pending.pending_approval is not None
@@ -683,6 +1007,7 @@ async def test_day12_rejection_never_changes_order_amount() -> None:
                     message="我要退款 100 元",
                     order_reference=order_reference,
                 ),
+                f"create-{uuid4()}",
             )
             thread_id = pending.ticket.thread_id
             assert pending.pending_approval is not None

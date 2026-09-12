@@ -1,10 +1,12 @@
+import hashlib
+import json
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
 
 from psycopg.types.json import Jsonb
 
-from ticketpilot.db import BusinessPool
+from ticketpilot.db import BusinessConnection, BusinessPool
 from ticketpilot.domain import ActorType, MessageRole, PrincipalRole, TicketStatus
 from ticketpilot.errors import ResourceNotFound, StateConflict
 from ticketpilot.schemas import AddTicketMessageRequest, CreateTicketRequest, RequestPrincipal
@@ -15,6 +17,7 @@ class CreatedTicket:
     ticket: dict[str, Any]
     message: dict[str, Any]
     run_id: UUID
+    should_run: bool
 
 
 @dataclass(frozen=True)
@@ -30,15 +33,83 @@ class TicketRepository:
     def __init__(self, pool: BusinessPool) -> None:
         self.pool = pool
 
+    @staticmethod
+    def _create_request_hash(request: CreateTicketRequest) -> str:
+        canonical = json.dumps(
+            {"version": 1, **request.model_dump(mode="json")},
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    async def _creation_message(
+        connection: BusinessConnection, tenant_id: str, ticket_id: UUID
+    ) -> dict[str, Any]:
+        cursor = await connection.execute(
+            """
+            SELECT id, run_id, role, content, citations, created_at
+            FROM ticketpilot.ticket_messages
+            WHERE tenant_id = %s AND ticket_id = %s
+              AND role IN ('CUSTOMER', 'STAFF') AND run_id IS NOT NULL
+            ORDER BY created_at, id
+            LIMIT 1
+            """,
+            (tenant_id, ticket_id),
+        )
+        message = await cursor.fetchone()
+        if message is None:
+            raise RuntimeError("Idempotent ticket has no creation message")
+        return message
+
     async def create(
-        self, principal: RequestPrincipal, request: CreateTicketRequest
+        self,
+        principal: RequestPrincipal,
+        request: CreateTicketRequest,
+        idempotency_key: str,
+        *,
+        reserve_run: bool = False,
     ) -> CreatedTicket:
         ticket_id = uuid4()
         message_id = uuid4()
         run_id = uuid4()
         thread_id = str(uuid4())
+        request_hash = self._create_request_hash(request)
 
         async with self.pool.connection() as connection, connection.transaction():
+            cursor = await connection.execute(
+                """
+                SELECT id, thread_id, status, subject, category, priority,
+                       risk_level, created_at, updated_at, active_run_id,
+                       run_started, create_request_hash
+                FROM ticketpilot.tickets
+                WHERE tenant_id = %s AND create_request_actor_id = %s
+                  AND create_idempotency_key = %s
+                FOR UPDATE
+                """,
+                (principal.tenant_id, principal.actor_id, idempotency_key),
+            )
+            existing_ticket = await cursor.fetchone()
+            if existing_ticket is not None:
+                if existing_ticket["create_request_hash"] != request_hash:
+                    raise StateConflict(
+                        "Idempotency-Key was already used with a different ticket request"
+                    )
+                existing_message = await self._creation_message(
+                    connection, principal.tenant_id, existing_ticket["id"]
+                )
+                return CreatedTicket(
+                    ticket=existing_ticket,
+                    message=existing_message,
+                    run_id=existing_message["run_id"],
+                    should_run=(
+                        reserve_run
+                        and existing_ticket["active_run_id"] == existing_message["run_id"]
+                        and not existing_ticket["run_started"]
+                    ),
+                )
+
             order = None
             if request.order_reference is not None:
                 if principal.role is PrincipalRole.CUSTOMER:
@@ -68,10 +139,14 @@ class TicketRepository:
             cursor = await connection.execute(
                 """
                 INSERT INTO ticketpilot.tickets (
-                    id, tenant_id, customer_id, order_pk, thread_id, status, subject
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    id, tenant_id, customer_id, order_pk, thread_id, status, subject,
+                    create_request_actor_id, create_idempotency_key, create_request_hash
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (
+                    tenant_id, create_request_actor_id, create_idempotency_key
+                ) WHERE create_idempotency_key IS NOT NULL DO NOTHING
                 RETURNING id, thread_id, status, subject, category, priority,
-                          risk_level, created_at, updated_at
+                          risk_level, created_at, updated_at, active_run_id, run_started
                 """,
                 (
                     ticket_id,
@@ -81,9 +156,45 @@ class TicketRepository:
                     thread_id,
                     TicketStatus.NEW.value,
                     request.subject,
+                    principal.actor_id,
+                    idempotency_key,
+                    request_hash,
                 ),
             )
             ticket = await cursor.fetchone()
+            if ticket is None:
+                cursor = await connection.execute(
+                    """
+                    SELECT id, thread_id, status, subject, category, priority,
+                           risk_level, created_at, updated_at, active_run_id,
+                           run_started, create_request_hash
+                    FROM ticketpilot.tickets
+                    WHERE tenant_id = %s AND create_request_actor_id = %s
+                      AND create_idempotency_key = %s
+                    FOR UPDATE
+                    """,
+                    (principal.tenant_id, principal.actor_id, idempotency_key),
+                )
+                existing_ticket = await cursor.fetchone()
+                if existing_ticket is None:
+                    raise RuntimeError("Idempotent ticket could not be loaded")
+                if existing_ticket["create_request_hash"] != request_hash:
+                    raise StateConflict(
+                        "Idempotency-Key was already used with a different ticket request"
+                    )
+                existing_message = await self._creation_message(
+                    connection, principal.tenant_id, existing_ticket["id"]
+                )
+                return CreatedTicket(
+                    ticket=existing_ticket,
+                    message=existing_message,
+                    run_id=existing_message["run_id"],
+                    should_run=(
+                        reserve_run
+                        and existing_ticket["active_run_id"] == existing_message["run_id"]
+                        and not existing_ticket["run_started"]
+                    ),
+                )
 
             cursor = await connection.execute(
                 """
@@ -103,6 +214,15 @@ class TicketRepository:
                 ),
             )
             message = await cursor.fetchone()
+
+            if reserve_run:
+                await connection.execute(
+                    """
+                    UPDATE ticketpilot.tickets SET active_run_id = %s, trigger_message_id = %s
+                    WHERE tenant_id = %s AND id = %s
+                    """,
+                    (run_id, message_id, principal.tenant_id, ticket_id),
+                )
 
             actor_type = (
                 ActorType.CUSTOMER if principal.role is PrincipalRole.CUSTOMER else ActorType.STAFF
@@ -129,7 +249,12 @@ class TicketRepository:
 
         if ticket is None or message is None:
             raise RuntimeError("Ticket creation did not return persisted rows")
-        return CreatedTicket(ticket=ticket, message=message, run_id=run_id)
+        return CreatedTicket(
+            ticket=ticket,
+            message=message,
+            run_id=run_id,
+            should_run=reserve_run,
+        )
 
     async def append_message(
         self,
@@ -141,21 +266,17 @@ class TicketRepository:
         run_id = uuid4()
         message_id = uuid4()
         message_role = (
-            MessageRole.CUSTOMER
-            if principal.role is PrincipalRole.CUSTOMER
-            else MessageRole.STAFF
+            MessageRole.CUSTOMER if principal.role is PrincipalRole.CUSTOMER else MessageRole.STAFF
         )
         actor_type = (
-            ActorType.CUSTOMER
-            if principal.role is PrincipalRole.CUSTOMER
-            else ActorType.STAFF
+            ActorType.CUSTOMER if principal.role is PrincipalRole.CUSTOMER else ActorType.STAFF
         )
 
         async with self.pool.connection() as connection, connection.transaction():
             if principal.role is PrincipalRole.CUSTOMER:
                 cursor = await connection.execute(
                     """
-                    SELECT id, thread_id, status
+                    SELECT id, thread_id, status, active_run_id, run_started
                     FROM ticketpilot.tickets
                     WHERE tenant_id = %s AND id = %s AND customer_id = %s
                     FOR UPDATE
@@ -165,7 +286,7 @@ class TicketRepository:
             else:
                 cursor = await connection.execute(
                     """
-                    SELECT id, thread_id, status
+                    SELECT id, thread_id, status, active_run_id, run_started
                     FROM ticketpilot.tickets
                     WHERE tenant_id = %s AND id = %s
                     FOR UPDATE
@@ -187,40 +308,26 @@ class TicketRepository:
             existing = await cursor.fetchone()
             if existing is not None:
                 if existing["content"] != request.message or existing["role"] != message_role.value:
+                    raise StateConflict("Idempotency-Key was already used with a different message")
+                if ticket["active_run_id"] == existing["run_id"] and ticket["run_started"]:
                     raise StateConflict(
-                        "Idempotency-Key was already used with a different message"
+                        "This message is already executing; retry after it completes"
                     )
-                cursor = await connection.execute(
-                    """
-                    SELECT 1
-                    FROM ticketpilot.audit_events
-                    WHERE tenant_id = %s AND ticket_id = %s AND run_id = %s
-                      AND event_type IN (
-                          'TICKET_RESOLVED', 'REFUND_APPROVAL_REQUESTED', 'RUN_FAILED'
-                      )
-                    LIMIT 1
-                    """,
-                    (principal.tenant_id, ticket_id, existing["run_id"]),
-                )
-                terminal_event = await cursor.fetchone()
                 return AppendedTicketMessage(
                     ticket_id=ticket_id,
                     thread_id=ticket["thread_id"],
                     message=existing,
                     run_id=existing["run_id"],
                     should_run=(
-                        terminal_event is None
-                        and ticket["status"]
-                        in {
-                            TicketStatus.NEW.value,
-                            TicketStatus.RESOLVED.value,
-                            TicketStatus.FAILED.value,
-                        }
+                        ticket["active_run_id"] == existing["run_id"] and not ticket["run_started"]
                     ),
                 )
 
+            if ticket["active_run_id"] is not None:
+                raise StateConflict("Ticket already has an active run; retry after it completes")
             if ticket["status"] not in {
                 TicketStatus.NEW.value,
+                TicketStatus.WAITING_INFORMATION.value,
                 TicketStatus.RESOLVED.value,
                 TicketStatus.FAILED.value,
             }:
@@ -246,6 +353,14 @@ class TicketRepository:
                 ),
             )
             message = await cursor.fetchone()
+            await connection.execute(
+                """
+                UPDATE ticketpilot.tickets
+                SET active_run_id = %s, trigger_message_id = %s, run_started = false
+                WHERE tenant_id = %s AND id = %s
+                """,
+                (run_id, message_id, principal.tenant_id, ticket_id),
+            )
             await connection.execute(
                 """
                 INSERT INTO ticketpilot.audit_events (
@@ -275,6 +390,29 @@ class TicketRepository:
             run_id=run_id,
             should_run=True,
         )
+
+    async def claim_run(self, tenant_id: str, ticket_id: UUID, run_id: UUID) -> None:
+        async with self.pool.connection() as connection, connection.transaction():
+            cursor = await connection.execute(
+                """
+                UPDATE ticketpilot.tickets SET run_started = true
+                WHERE tenant_id = %s AND id = %s AND active_run_id = %s AND NOT run_started
+                """,
+                (tenant_id, ticket_id, run_id),
+            )
+            if cursor.rowcount != 1:
+                raise StateConflict("Run is already executing or no longer owns the ticket")
+
+    async def release_run(self, tenant_id: str, ticket_id: UUID, run_id: UUID) -> None:
+        async with self.pool.connection() as connection, connection.transaction():
+            await connection.execute(
+                """
+                UPDATE ticketpilot.tickets
+                SET active_run_id = NULL, trigger_message_id = NULL, run_started = false
+                WHERE tenant_id = %s AND id = %s AND active_run_id = %s AND run_started
+                """,
+                (tenant_id, ticket_id, run_id),
+            )
 
     async def get_ticket(
         self, principal: RequestPrincipal, ticket_id: UUID

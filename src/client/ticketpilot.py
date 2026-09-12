@@ -34,12 +34,19 @@ class TicketPilotClient:
         *,
         subject: str,
         message: str,
+        idempotency_key: str,
         order_reference: str | None = None,
     ) -> dict[str, Any]:
         payload = {"subject": subject, "message": message}
         if order_reference:
             payload["order_reference"] = order_reference
-        return self._request("POST", "/v1/tickets", token, json=payload)
+        return self._request(
+            "POST",
+            "/v1/tickets",
+            token,
+            json=payload,
+            headers={"Idempotency-Key": idempotency_key},
+        )
 
     def get_ticket(self, token: str, ticket_id: str) -> dict[str, Any]:
         return self._request("GET", f"/v1/tickets/{ticket_id}", token)
