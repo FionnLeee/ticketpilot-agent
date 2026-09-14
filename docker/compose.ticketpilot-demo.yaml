@@ -29,3 +29,7 @@ services:
     depends_on:
       ticketpilot_seed:
         condition: service_completed_successfully
+
+  streamlit_app:
+    environment:
+      TICKETPILOT_ENABLED: "true"

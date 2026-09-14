@@ -93,8 +93,16 @@ def click_button(page: Page, label: str, scope: str = MAIN) -> None:
     page.locator(scope).get_by_role("button", name=label, exact=False).first.click()
 
 
+def field(page: Page, label: str, scope: str = MAIN):
+    # While Streamlit swaps in a rerun's elements the old and new widget briefly coexist;
+    # wait for the DOM to settle before asserting on a value.
+    locator = page.locator(scope).get_by_label(label)
+    expect(locator).to_have_count(1, timeout=STEP_TIMEOUT_MS)
+    return locator
+
+
 def choose_identity(page: Page, label: str) -> None:
-    box = page.locator(SIDEBAR).get_by_label("演示身份")
+    box = field(page, "演示身份", SIDEBAR)
     box.click()
     option = page.get_by_role("option", name=label)
     try:
@@ -197,7 +205,7 @@ def run(page: Page, out: Path) -> None:
 
     log("1/8 logistics query")
     click_button(page, "查询物流", SIDEBAR)
-    expect(page.get_by_label("主题")).to_have_value("查询订单物流")
+    expect(field(page, "主题")).to_have_value("查询订单物流")
     click_button(page, "创建并运行")
     wait_for_text(page, "已基于证据回答")
     wait_for_text(page, "政策依据：订单物流与预计送达")
@@ -210,7 +218,7 @@ def run(page: Page, out: Path) -> None:
 
     log("3/8 vague refund needs input")
     click_button(page, "模糊退款", SIDEBAR)
-    expect(page.get_by_label("主题")).to_have_value("申请部分退款")
+    expect(field(page, "主题")).to_have_value("申请部分退款")
     click_button(page, "创建并运行")
     wait_for_text(page, "需要客户补充信息")
     if "待审批的退款动作" in main_text(page):
@@ -219,7 +227,7 @@ def run(page: Page, out: Path) -> None:
 
     log("4/8 supply amount -> waiting approval")
     click_button(page, "补充金额：100 元")
-    expect(page.get_by_label("追加消息")).to_have_value("100 元")
+    expect(field(page, "追加消息")).to_have_value("100 元", timeout=STEP_TIMEOUT_MS)
     click_button(page, "发送并运行")
     wait_for_text(page, "退款动作等待人工审批")
     wait_for_text(page, "当前身份是客户，不能审批")
@@ -239,7 +247,9 @@ def run(page: Page, out: Path) -> None:
     log("6/8 same amount again is a new action")
     choose_identity(page, CUSTOMER)
     click_button(page, "再次申请相同金额")
-    expect(page.get_by_label("追加消息")).to_have_value(re.compile("再申请退款 100 元"))
+    expect(field(page, "追加消息")).to_have_value(
+        re.compile("再申请退款 100 元"), timeout=STEP_TIMEOUT_MS
+    )
     click_button(page, "发送并运行")
     wait_for_text(page, "退款动作等待人工审批")
     second_action = action_id(page)
@@ -255,9 +265,9 @@ def run(page: Page, out: Path) -> None:
     current = ticket_id(page)
     choose_identity(page, OTHER_TENANT)
     page.locator(SIDEBAR).get_by_text("按 Ticket ID 打开").click()
-    field = page.locator(SIDEBAR).get_by_label("Ticket ID")
-    field.fill(current)
-    field.press("Enter")
+    ticket_field = field(page, "Ticket ID", SIDEBAR)
+    ticket_field.fill(current)
+    ticket_field.press("Enter")
     click_button(page, "打开工单", SIDEBAR)
     wait_for_text(page, "统一返回 404", SIDEBAR)
     shoot(page, out, "08-cross-tenant-404")

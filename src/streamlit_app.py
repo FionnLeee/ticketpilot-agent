@@ -27,6 +27,8 @@ from voice import VoiceManager
 
 APP_TITLE = "Agent Service Toolkit"
 APP_ICON = "🧰"
+TICKETPILOT_TITLE = "TicketPilot 售后工单工作台"
+TICKETPILOT_ICON = "🎫"
 USER_ID_COOKIE = "user_id"
 
 
@@ -66,9 +68,13 @@ def fetch_user_threads_cached(
 
 
 async def main() -> None:
+    load_dotenv()
+    # set_page_config must run before the service is contacted, so the tab title follows
+    # the same env flag the service reads; the console itself still keys off /info.
+    ticketpilot_hint = os.getenv("TICKETPILOT_ENABLED", "").strip().lower() == "true"
     st.set_page_config(
-        page_title=APP_TITLE,
-        page_icon=APP_ICON,
+        page_title=TICKETPILOT_TITLE if ticketpilot_hint else APP_TITLE,
+        page_icon=TICKETPILOT_ICON if ticketpilot_hint else APP_ICON,
         menu_items={},
     )
 
