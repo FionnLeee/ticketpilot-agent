@@ -13,6 +13,7 @@ from ticketpilot.db import BusinessPool, apply_migrations, get_ticketpilot_pool
 from ticketpilot.domain import (
     ApprovalDecision,
     PrincipalRole,
+    ProcessingResult,
     TicketCategory,
     TicketPriority,
     TicketStatus,
@@ -68,6 +69,11 @@ async def test_refund_counterexamples_never_create_approvals(message, expected_s
                 f"create-{uuid4()}",
             )
             assert result.ticket.status is expected_status
+            assert result.ticket.processing_result is (
+                ProcessingResult.NEEDS_INPUT
+                if expected_status is TicketStatus.WAITING_INFORMATION
+                else ProcessingResult.ANSWERED
+            )
             assert result.pending_approval is None
             if "只是咨询" in message:
                 assert "政策依据" in result.latest_message.content
@@ -257,6 +263,16 @@ class FailingReasoner(FakeReasoner):
         raise RuntimeError("model unavailable")
 
 
+class PolicyReasoner(FakeReasoner):
+    async def classify(
+        self,
+        message: str,
+        known_order_reference: str | None,
+        config: RunnableConfig,
+    ) -> TicketClassification:
+        return TicketClassification(category=TicketCategory.POLICY)
+
+
 class TimeoutOrderReader:
     async def get_by_reference(self, principal: RequestPrincipal, order_reference: str):
         raise TimeoutError
@@ -343,6 +359,7 @@ async def test_day11_normal_order_flow_is_grounded_and_resolved() -> None:
             events = await service.get_run_events(customer, result.run_id)
 
             assert result.ticket.status is TicketStatus.RESOLVED
+            assert result.ticket.processing_result is ProcessingResult.ANSWERED
             assert result.ticket.category is TicketCategory.ORDER_STATUS
             assert detail.order is not None
             assert detail.order.tracking_number_masked == "TR******7890"
@@ -494,10 +511,51 @@ async def test_day14_order_timeout_is_audited_and_fails_closed() -> None:
             events = await service.get_run_events(customer, result.run_id)
             order_event = next(event for event in events.events if event.tool_name == "query_order")
 
-            assert result.ticket.status is TicketStatus.RESOLVED
-            assert "未找到" in result.latest_message.content
+            assert result.ticket.status is TicketStatus.FAILED
+            assert result.ticket.processing_result is ProcessingResult.DEPENDENCY_FAILED
+            assert "暂时不可用" in result.latest_message.content
+            assert "未找到" not in result.latest_message.content
             assert order_event.event_type == "TOOL_FAILED"
             assert order_event.details["error_code"] == "DEPENDENCY_TIMEOUT"
+            assert events.events[-1].event_type == "DEPENDENCY_FAILED"
+            assert events.events[-1].details == {
+                "error_code": "DEPENDENCY_TIMEOUT",
+                "processing_result": "DEPENDENCY_FAILED",
+            }
+        finally:
+            if thread_id:
+                await saver.adelete_thread(thread_id)
+            await cleanup_tenant(pool, tenant_id)
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
+async def test_policy_without_evidence_is_not_reported_as_resolved() -> None:
+    tenant_id = f"tenant-{uuid4()}"
+    customer = make_principal(tenant_id, PrincipalRole.CUSTOMER, "customer-a")
+    saver = MemorySaver()
+    thread_id = ""
+    async with get_ticketpilot_pool() as pool:
+        await apply_migrations(pool)
+        try:
+            service = make_service(pool, build_ticketpilot_graph(saver))
+            service.reasoner = PolicyReasoner()
+            result = await service.create_ticket(
+                customer,
+                CreateTicketRequest(
+                    subject="无政策证据",
+                    message="一个语料库中不存在的规则 xyzzy",
+                ),
+                f"create-{uuid4()}",
+            )
+            thread_id = result.ticket.thread_id
+            events = await service.get_run_events(customer, result.run_id)
+
+            assert result.ticket.status is TicketStatus.FAILED
+            assert result.ticket.processing_result is ProcessingResult.INSUFFICIENT_EVIDENCE
+            assert "无法给出有依据的结论" in result.latest_message.content
+            assert events.events[-1].event_type == "INSUFFICIENT_EVIDENCE"
+            assert events.events[-1].details["error_code"] == "NO_RELEVANT_POLICY"
         finally:
             if thread_id:
                 await saver.adelete_thread(thread_id)
@@ -556,6 +614,7 @@ async def test_day14_unhandled_reasoner_failure_marks_ticket_failed() -> None:
             events = await service.get_run_events(customer, failure["run_id"])
 
             assert detail.status is TicketStatus.FAILED
+            assert detail.processing_result is ProcessingResult.PROCESSING_FAILED
             assert events.events[-1].event_type == "RUN_FAILED"
             assert events.events[-1].details["error_code"] == "RuntimeError"
         finally:
@@ -631,6 +690,7 @@ async def test_day12_postgres_checkpoint_resume_and_refund_idempotency() -> None
                 )
                 thread_id = pending.ticket.thread_id
                 assert pending.ticket.status is TicketStatus.WAITING_APPROVAL
+                assert pending.ticket.processing_result is ProcessingResult.WAITING_APPROVAL
                 assert pending.ticket.risk_level.value == "HIGH_RISK_WRITE"
                 assert pending.pending_approval is not None
                 approval_id = pending.pending_approval.id

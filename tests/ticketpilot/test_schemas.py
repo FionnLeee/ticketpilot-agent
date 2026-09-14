@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from ticketpilot.domain import (
     FulfillmentStatus,
     OrderPaymentStatus,
+    ProcessingResult,
     TicketStatus,
 )
 from ticketpilot.privacy import mask_tracking_number
@@ -76,6 +77,14 @@ def test_ticket_summary_requires_defined_status() -> None:
 
     payload["status"] = TicketStatus.NEW
     assert TicketSummary.model_validate(payload).status is TicketStatus.NEW
+
+    payload["status"] = TicketStatus.RESOLVED
+    payload["processing_result"] = ProcessingResult.ANSWERED
+    assert TicketSummary.model_validate(payload).processing_result is ProcessingResult.ANSWERED
+
+    payload["processing_result"] = ProcessingResult.NEEDS_INPUT
+    with pytest.raises(ValidationError, match="does not match"):
+        TicketSummary.model_validate(payload)
 
 
 @pytest.mark.parametrize(

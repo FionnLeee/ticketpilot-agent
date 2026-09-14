@@ -80,7 +80,7 @@ class TicketRepository:
         async with self.pool.connection() as connection, connection.transaction():
             cursor = await connection.execute(
                 """
-                SELECT id, thread_id, status, subject, category, priority,
+                SELECT id, thread_id, status, processing_result, subject, category, priority,
                        risk_level, created_at, updated_at, active_run_id,
                        run_started, create_request_hash
                 FROM ticketpilot.tickets
@@ -145,7 +145,7 @@ class TicketRepository:
                 ON CONFLICT (
                     tenant_id, create_request_actor_id, create_idempotency_key
                 ) WHERE create_idempotency_key IS NOT NULL DO NOTHING
-                RETURNING id, thread_id, status, subject, category, priority,
+                RETURNING id, thread_id, status, processing_result, subject, category, priority,
                           risk_level, created_at, updated_at, active_run_id, run_started
                 """,
                 (
@@ -165,7 +165,7 @@ class TicketRepository:
             if ticket is None:
                 cursor = await connection.execute(
                     """
-                    SELECT id, thread_id, status, subject, category, priority,
+                    SELECT id, thread_id, status, processing_result, subject, category, priority,
                            risk_level, created_at, updated_at, active_run_id,
                            run_started, create_request_hash
                     FROM ticketpilot.tickets

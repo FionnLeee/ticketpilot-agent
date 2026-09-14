@@ -101,6 +101,10 @@ def run_demo(args: argparse.Namespace) -> dict[str, Any]:
         )
         require(normal["ticket"]["status"] == "RESOLVED", "normal flow did not resolve")
         require(
+            normal["ticket"]["processing_result"] == "ANSWERED",
+            "normal flow did not report an answered result",
+        )
+        require(
             normal_replay["ticket"]["id"] == normal["ticket"]["id"]
             and normal_replay["run_id"] == normal["run_id"],
             "ticket creation retry was not idempotent",
@@ -161,8 +165,13 @@ def run_demo(args: argparse.Namespace) -> dict[str, Any]:
             refund["ticket"]["status"] == "WAITING_APPROVAL",
             "refund flow did not pause for approval",
         )
+        require(
+            refund["ticket"]["processing_result"] == "WAITING_APPROVAL",
+            "refund flow did not report a waiting approval result",
+        )
         approval = refund.get("pending_approval")
-        require(isinstance(approval, dict), "refund flow did not return pending approval")
+        if not isinstance(approval, dict):
+            raise DemoFailure("refund flow did not return pending approval")
         refund_events = client.request(
             "GET", f"/v1/runs/{refund['run_id']}/events", args.customer_token
         )
@@ -186,6 +195,10 @@ def run_demo(args: argparse.Namespace) -> dict[str, Any]:
             payload={"decision": "APPROVE", "reason": "Day 14 E2E 人工复核通过"},
         )
         require(approved["ticket"]["status"] == "RESOLVED", "approved refund did not resolve")
+        require(
+            approved["ticket"]["processing_result"] == "ANSWERED",
+            "approved refund did not report an answered result",
+        )
         approval_events = client.request(
             "GET", f"/v1/runs/{approved['run_id']}/events", args.approver_token
         )

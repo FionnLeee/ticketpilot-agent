@@ -17,6 +17,7 @@ from langgraph.types import interrupt
 
 from ticketpilot.domain import (
     ApprovalStatus,
+    ProcessingResult,
     RiskLevel,
     TicketCategory,
 )
@@ -42,6 +43,8 @@ class TicketAgentState(MessagesState, total=False):
     approval_id: str
     resume_payload: Any
     final_answer: str
+    processing_result: str
+    result_error_code: str
     pending_request: dict[str, Any]
     clarification: str
     order_conflict: bool
@@ -305,6 +308,10 @@ def plan_work(state: TicketAgentState) -> dict[str, Any]:
 
 
 def route_work(state: TicketAgentState) -> Literal["approval", "answer"]:
+    if state.get("proposed_refund_amount"):
+        policy_result = state.get("policy_result") or {}
+        if policy_result.get("error_code") == "DEPENDENCY_TIMEOUT":
+            return "answer"
     return "approval" if state.get("proposed_refund_amount") else "answer"
 
 
@@ -320,39 +327,95 @@ async def generate_grounded_answer(
     config: RunnableConfig = get_config()
     if state.get("clarification"):
         answer = state["clarification"]
-        return {"final_answer": answer, "messages": [AIMessage(content=answer)]}
+        return {
+            "final_answer": answer,
+            "processing_result": ProcessingResult.NEEDS_INPUT.value,
+            "result_error_code": "MISSING_REQUIRED_INFORMATION",
+            "messages": [AIMessage(content=answer)],
+        }
     classification = TicketClassification.model_validate(state["classification"])
-    order_result = state.get("order_result")
+    order_result = state.get("order_result") or {}
     if classification.category in {TicketCategory.ORDER_STATUS, TicketCategory.REFUND}:
         if not state.get("order_reference"):
             answer = "请提供需要查询的订单号，我不会猜测订单信息。"
-            return {"final_answer": answer, "messages": [AIMessage(content=answer)]}
-        if not order_result or not order_result.get("found"):
+            return {
+                "final_answer": answer,
+                "processing_result": ProcessingResult.NEEDS_INPUT.value,
+                "result_error_code": "MISSING_ORDER_REFERENCE",
+                "messages": [AIMessage(content=answer)],
+            }
+        if order_result.get("error_code") == "DEPENDENCY_TIMEOUT":
+            answer = "订单服务暂时不可用，本轮没有确认订单状态。请稍后使用新的请求重试。"
+            return {
+                "final_answer": answer,
+                "processing_result": ProcessingResult.DEPENDENCY_FAILED.value,
+                "result_error_code": "DEPENDENCY_TIMEOUT",
+                "messages": [AIMessage(content=answer)],
+            }
+        if not order_result.get("found"):
             answer = "在当前账户授权范围内未找到该订单，请核对订单号。"
-            return {"final_answer": answer, "messages": [AIMessage(content=answer)]}
+            return {
+                "final_answer": answer,
+                "processing_result": ProcessingResult.NEEDS_INPUT.value,
+                "result_error_code": "ORDER_NOT_FOUND",
+                "messages": [AIMessage(content=answer)],
+            }
     if classification.category is TicketCategory.REFUND and order_result:
         refundable = Decimal(order_result["order"]["refundable_amount"])
         requested = classification.requested_refund_amount
         if refundable <= 0:
             answer = "订单当前没有可退款金额，因此没有创建退款审批。"
-            return {"final_answer": answer, "messages": [AIMessage(content=answer)]}
+            return {
+                "final_answer": answer,
+                "processing_result": ProcessingResult.ANSWERED.value,
+                "result_error_code": "",
+                "messages": [AIMessage(content=answer)],
+            }
         if requested is not None and requested > refundable:
             answer = f"申请金额超过当前可退款上限 {refundable:.2f}，没有创建退款审批。"
-            return {"final_answer": answer, "messages": [AIMessage(content=answer)]}
+            return {
+                "final_answer": answer,
+                "processing_result": ProcessingResult.ANSWERED.value,
+                "result_error_code": "",
+                "messages": [AIMessage(content=answer)],
+            }
     evidence = _policy_evidence(state)
+    policy_error = (state.get("policy_result") or {}).get("error_code")
+    if policy_error == "DEPENDENCY_TIMEOUT" and classification.category in {
+        TicketCategory.POLICY,
+        TicketCategory.REFUND,
+    }:
+        answer = "政策检索服务暂时不可用，本轮没有生成政策结论。请稍后重试。"
+        return {
+            "final_answer": answer,
+            "processing_result": ProcessingResult.DEPENDENCY_FAILED.value,
+            "result_error_code": "DEPENDENCY_TIMEOUT",
+            "messages": [AIMessage(content=answer)],
+        }
     if classification.category is TicketCategory.POLICY and not evidence:
-        answer = "当前没有检索到可引用的售后政策，我不会编造政策答案。"
-    else:
-        answer = await runtime.context.reasoner.answer(
-            state["customer_message"], classification, order_result, evidence, config
-        )
-    return {"final_answer": answer, "messages": [AIMessage(content=answer)]}
+        answer = "当前没有检索到可引用的售后政策，本轮无法给出有依据的结论，请转人工核查。"
+        return {
+            "final_answer": answer,
+            "processing_result": ProcessingResult.INSUFFICIENT_EVIDENCE.value,
+            "result_error_code": "NO_RELEVANT_POLICY",
+            "messages": [AIMessage(content=answer)],
+        }
+    answer = await runtime.context.reasoner.answer(
+        state["customer_message"], classification, order_result or None, evidence, config
+    )
+    return {
+        "final_answer": answer,
+        "processing_result": ProcessingResult.ANSWERED.value,
+        "result_error_code": "",
+        "messages": [AIMessage(content=answer)],
+    }
 
 
 async def finalize_ticket(
     state: TicketAgentState, runtime: Runtime[TicketGraphContext]
 ) -> dict[str, Any]:
-    if state.get("clarification"):
+    processing_result = ProcessingResult(state["processing_result"])
+    if processing_result is ProcessingResult.NEEDS_INPUT:
         pending = (
             state["classification"]
             if state["classification"]["category"] == TicketCategory.REFUND.value
@@ -366,6 +429,19 @@ async def finalize_ticket(
             _required_uuid(state, "run_id"),
             state["final_answer"],
             pending,
+        )
+        return {}
+    if processing_result in {
+        ProcessingResult.DEPENDENCY_FAILED,
+        ProcessingResult.INSUFFICIENT_EVIDENCE,
+    }:
+        await runtime.context.workflow_repository.record_unsuccessful_result(
+            runtime.context.principal.tenant_id,
+            _required_uuid(state, "ticket_id"),
+            _required_uuid(state, "run_id"),
+            state["final_answer"],
+            processing_result,
+            state["result_error_code"],
         )
         return {}
     citations = [item.model_dump(mode="json") for item in _policy_evidence(state)]

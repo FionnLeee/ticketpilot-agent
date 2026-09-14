@@ -35,6 +35,8 @@ TicketPilot 专用演示数据和政策都是合成数据，不包含真实客�
 
 创建工单也必须携带 `Idempotency-Key`。服务按 tenant、调用主体和 key 保存规范化请求摘要：同 key 同正文返回原 `ticket_id/run_id`，同 key 换正文返回 409，创建新工单必须换 key。退款审批使用触发消息 ID 作为稳定 `action_id`；同一消息或工作流节点重放复用原审批，而新消息再次申请相同金额会创建新审批。`0005_request_action_idempotency.sql` 为这两层语义增加数据库唯一约束。
 
+工单状态与本轮处理结果是两个独立维度。API 和 Streamlit 通过 `processing_result` 区分 `ANSWERED`、`NEEDS_INPUT`、`WAITING_APPROVAL`、`DEPENDENCY_FAILED`、`INSUFFICIENT_EVIDENCE` 和 `PROCESSING_FAILED`。例如订单服务超时不会再伪装成“订单不存在”或 `RESOLVED`；政策无命中也不会被计为成功回答。`0006_processing_result.sql` 在数据库层约束状态与结果的合法组合。
+
 ### [在线体验应用](https://agent-service-toolkit.streamlit.app/)
 
 <a href="https://agent-service-toolkit.streamlit.app/"><img src="media/app_screenshot.png" width="600" alt="应用截图"></a>

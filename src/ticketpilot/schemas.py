@@ -16,6 +16,7 @@ from ticketpilot.domain import (
     OrderPaymentStatus,
     PolicyLookupErrorCode,
     PrincipalRole,
+    ProcessingResult,
     RiskLevel,
     TicketCategory,
     TicketPriority,
@@ -141,6 +142,7 @@ class TicketSummary(TicketPilotModel):
     id: UUID
     thread_id: str
     status: TicketStatus
+    processing_result: ProcessingResult | None = None
     subject: str
     category: TicketCategory | None = None
     priority: TicketPriority | None = None
@@ -148,6 +150,24 @@ class TicketSummary(TicketPilotModel):
     order_reference: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def processing_result_matches_status(self) -> "TicketSummary":
+        allowed = {
+            TicketStatus.NEW: {None},
+            TicketStatus.PROCESSING: {None},
+            TicketStatus.WAITING_APPROVAL: {ProcessingResult.WAITING_APPROVAL},
+            TicketStatus.WAITING_INFORMATION: {ProcessingResult.NEEDS_INPUT},
+            TicketStatus.RESOLVED: {ProcessingResult.ANSWERED},
+            TicketStatus.FAILED: {
+                ProcessingResult.DEPENDENCY_FAILED,
+                ProcessingResult.INSUFFICIENT_EVIDENCE,
+                ProcessingResult.PROCESSING_FAILED,
+            },
+        }
+        if self.processing_result not in allowed[self.status]:
+            raise ValueError("processing_result does not match ticket status")
+        return self
 
 
 class TicketDetail(TicketSummary):

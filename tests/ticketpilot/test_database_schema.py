@@ -90,6 +90,30 @@ async def test_tickets_reject_unknown_status() -> None:
 
 @pytest.mark.docker
 @pytest.mark.asyncio
+async def test_ticket_status_and_processing_result_must_agree() -> None:
+    with pytest.raises(errors.CheckViolation):
+        async with get_ticketpilot_pool() as pool, pool.connection() as connection:
+            await connection.execute(
+                """
+                INSERT INTO ticketpilot.tickets (
+                    id, tenant_id, customer_id, thread_id, status,
+                    processing_result, subject
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    uuid4(),
+                    "tenant-result-constraint-test",
+                    "customer-1",
+                    str(uuid4()),
+                    "RESOLVED",
+                    "NEEDS_INPUT",
+                    "Invalid result test",
+                ),
+            )
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
 async def test_ticket_order_foreign_key_cannot_cross_tenants() -> None:
     order_pk = uuid4()
     ticket_id = uuid4()
@@ -154,14 +178,16 @@ async def test_approvals_enforce_tenant_idempotency_key() -> None:
             await connection.execute(
                 """
                 INSERT INTO ticketpilot.tickets (
-                    id, tenant_id, customer_id, thread_id, status, subject
-                ) VALUES (%s, %s, %s, %s, %s, %s)
+                    id, tenant_id, customer_id, thread_id, status,
+                    processing_result, subject
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     ticket_id,
                     tenant_id,
                     "customer-1",
                     str(uuid4()),
+                    "WAITING_APPROVAL",
                     "WAITING_APPROVAL",
                     "Idempotency test",
                 ),

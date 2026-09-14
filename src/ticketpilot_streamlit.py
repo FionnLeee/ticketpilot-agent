@@ -46,10 +46,23 @@ def _load_events(client: TicketPilotClient, token: str, run_id: str) -> None:
 
 def _render_ticket(ticket: dict[str, Any]) -> None:
     st.markdown("#### 当前工单")
-    status, category, risk = st.columns(3)
+    status, result, category, risk = st.columns(4)
     status.metric("状态", ticket.get("status", "-"))
+    result.metric("本轮结果", ticket.get("processing_result") or "运行中")
     category.metric("分类", ticket.get("category") or "-")
     risk.metric("风险", ticket.get("risk_level") or "-")
+    result_value = ticket.get("processing_result")
+    result_messages = {
+        "ANSWERED": (st.success, "本轮已基于现有数据完成回答。"),
+        "NEEDS_INPUT": (st.info, "本轮尚未解决：需要用户补充信息。"),
+        "WAITING_APPROVAL": (st.warning, "本轮尚未完成：退款动作正在等待人工审批。"),
+        "DEPENDENCY_FAILED": (st.error, "本轮未解决：外部依赖不可用，可以稍后重试。"),
+        "INSUFFICIENT_EVIDENCE": (st.warning, "本轮未解决：缺少可引用证据，需要人工核查。"),
+        "PROCESSING_FAILED": (st.error, "本轮处理失败，需要重试或人工处理。"),
+    }
+    if result_value in result_messages:
+        renderer, message = result_messages[result_value]
+        renderer(message)
     st.caption(f"Ticket `{ticket.get('id', '-')}` · Thread `{ticket.get('thread_id', '-')}`")
     st.write(ticket.get("subject", ""))
 

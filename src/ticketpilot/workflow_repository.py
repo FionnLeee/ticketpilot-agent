@@ -14,6 +14,7 @@ from ticketpilot.domain import (
     MessageRole,
     OrderPaymentStatus,
     PrincipalRole,
+    ProcessingResult,
     RiskLevel,
     TicketCategory,
     TicketPriority,
@@ -133,7 +134,8 @@ class TicketWorkflowRepository:
                 raise StateConflict("Run has no matching trigger message")
             await connection.execute(
                 """
-                UPDATE ticketpilot.tickets SET status = %s, pending_request = '{}'::jsonb,
+                UPDATE ticketpilot.tickets SET status = %s, processing_result = NULL,
+                    pending_request = '{}'::jsonb,
                     version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s
                 """,
@@ -301,12 +303,14 @@ class TicketWorkflowRepository:
             cursor = await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = %s, pending_request = %s, resolution_summary = NULL,
+                SET status = %s, processing_result = %s, pending_request = %s,
+                    resolution_summary = NULL,
                     resolved_at = NULL, version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s AND status = %s
                 """,
                 (
                     TicketStatus.WAITING_INFORMATION.value,
+                    ProcessingResult.NEEDS_INPUT.value,
                     Jsonb(pending_request),
                     tenant_id,
                     ticket_id,
@@ -325,6 +329,7 @@ class TicketWorkflowRepository:
                 AuditOutcome.SUCCEEDED,
                 actor_type=ActorType.AGENT,
                 node_name="finalize_ticket",
+                details={"processing_result": ProcessingResult.NEEDS_INPUT.value},
             )
 
     async def resolve_ticket(
@@ -349,12 +354,14 @@ class TicketWorkflowRepository:
             cursor = await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = %s, resolution_summary = %s, resolved_at = now(),
+                SET status = %s, processing_result = %s, resolution_summary = %s,
+                    resolved_at = now(),
                     version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s AND status = %s
                 """,
                 (
                     TicketStatus.RESOLVED.value,
+                    ProcessingResult.ANSWERED.value,
                     message,
                     tenant_id,
                     ticket_id,
@@ -375,7 +382,57 @@ class TicketWorkflowRepository:
                 AuditOutcome.SUCCEEDED,
                 actor_type=ActorType.AGENT,
                 node_name="finalize_ticket",
-                details={"citation_count": len(citations)},
+                details={
+                    "citation_count": len(citations),
+                    "processing_result": ProcessingResult.ANSWERED.value,
+                },
+            )
+
+    async def record_unsuccessful_result(
+        self,
+        tenant_id: str,
+        ticket_id: UUID,
+        run_id: UUID,
+        message: str,
+        result: ProcessingResult,
+        error_code: str,
+    ) -> None:
+        if result not in {
+            ProcessingResult.DEPENDENCY_FAILED,
+            ProcessingResult.INSUFFICIENT_EVIDENCE,
+        }:
+            raise ValueError(f"Unsupported unsuccessful result: {result.value}")
+        async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, tenant_id, ticket_id, run_id)
+            cursor = await connection.execute(
+                """
+                UPDATE ticketpilot.tickets
+                SET status = %s, processing_result = %s, resolution_summary = %s,
+                    resolved_at = NULL, version = version + 1, updated_at = now()
+                WHERE tenant_id = %s AND id = %s AND status = %s
+                """,
+                (
+                    TicketStatus.FAILED.value,
+                    result.value,
+                    message,
+                    tenant_id,
+                    ticket_id,
+                    TicketStatus.PROCESSING.value,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise StateConflict("Ticket is not processing during unsuccessful completion")
+            await self._append_agent_message(connection, tenant_id, ticket_id, run_id, message, [])
+            await self._append_audit(
+                connection,
+                tenant_id,
+                ticket_id,
+                run_id,
+                result.value,
+                AuditOutcome.FAILED,
+                actor_type=ActorType.SYSTEM,
+                node_name="finalize_ticket",
+                details={"processing_result": result.value, "error_code": error_code},
             )
 
     async def create_pending_refund(
@@ -523,10 +580,16 @@ class TicketWorkflowRepository:
             await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = %s, version = version + 1, updated_at = now()
+                SET status = %s, processing_result = %s,
+                    version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s
                 """,
-                (TicketStatus.WAITING_APPROVAL.value, principal.tenant_id, ticket_id),
+                (
+                    TicketStatus.WAITING_APPROVAL.value,
+                    ProcessingResult.WAITING_APPROVAL.value,
+                    principal.tenant_id,
+                    ticket_id,
+                ),
             )
             await self._append_audit(
                 connection,
@@ -542,6 +605,7 @@ class TicketWorkflowRepository:
                     "action_id": str(action_id),
                     "amount": str(amount),
                     "currency": row["currency"],
+                    "processing_result": ProcessingResult.WAITING_APPROVAL.value,
                 },
             )
         return PendingApproval(id=approval["id"], action_payload=approval["action_payload"])
@@ -595,7 +659,8 @@ class TicketWorkflowRepository:
                     await connection.execute(
                         """
                         UPDATE ticketpilot.tickets
-                        SET status = %s, active_run_id = %s, trigger_message_id = NULL,
+                        SET status = %s, processing_result = NULL, active_run_id = %s,
+                            trigger_message_id = NULL,
                             run_started = false, version = version + 1, updated_at = now()
                         WHERE tenant_id = %s AND id = %s
                         """,
@@ -646,7 +711,8 @@ class TicketWorkflowRepository:
             cursor = await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = %s, active_run_id = %s, trigger_message_id = NULL,
+                SET status = %s, processing_result = NULL, active_run_id = %s,
+                    trigger_message_id = NULL,
                     run_started = false, version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s AND status = %s
                 """,
@@ -752,11 +818,17 @@ class TicketWorkflowRepository:
                 await connection.execute(
                     """
                     UPDATE ticketpilot.tickets
-                    SET status = %s, resolution_summary = %s,
+                    SET status = %s, processing_result = %s, resolution_summary = %s,
                         version = version + 1, updated_at = now()
                     WHERE tenant_id = %s AND id = %s
                     """,
-                    (TicketStatus.FAILED.value, message, tenant_id, row["ticket_id"]),
+                    (
+                        TicketStatus.FAILED.value,
+                        ProcessingResult.PROCESSING_FAILED.value,
+                        message,
+                        tenant_id,
+                        row["ticket_id"],
+                    ),
                 )
                 await self._append_agent_message(
                     connection, tenant_id, row["ticket_id"], run_id, message, []
@@ -772,6 +844,7 @@ class TicketWorkflowRepository:
                     approval_id=approval_id,
                     node_name="execute_refund_mock",
                     tool_name="execute_refund_mock",
+                    details={"processing_result": ProcessingResult.PROCESSING_FAILED.value},
                 )
                 return RefundExecutionResult(executed=False, message=message)
 
@@ -802,11 +875,18 @@ class TicketWorkflowRepository:
             await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = %s, resolution_summary = %s, resolved_at = now(),
+                SET status = %s, processing_result = %s, resolution_summary = %s,
+                    resolved_at = now(),
                     version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s
                 """,
-                (TicketStatus.RESOLVED.value, message, tenant_id, row["ticket_id"]),
+                (
+                    TicketStatus.RESOLVED.value,
+                    ProcessingResult.ANSWERED.value,
+                    message,
+                    tenant_id,
+                    row["ticket_id"],
+                ),
             )
             await self._append_agent_message(
                 connection, tenant_id, row["ticket_id"], run_id, message, []
@@ -822,7 +902,11 @@ class TicketWorkflowRepository:
                 approval_id=approval_id,
                 node_name="execute_refund_mock",
                 tool_name="execute_refund_mock",
-                details={"amount": str(amount), "remaining_refundable": str(remaining)},
+                details={
+                    "amount": str(amount),
+                    "remaining_refundable": str(remaining),
+                    "processing_result": ProcessingResult.ANSWERED.value,
+                },
             )
             return RefundExecutionResult(executed=True, message=message)
 
@@ -848,12 +932,14 @@ class TicketWorkflowRepository:
             cursor = await connection.execute(
                 """
                 UPDATE ticketpilot.tickets
-                SET status = %s, resolution_summary = %s, resolved_at = now(),
+                SET status = %s, processing_result = %s, resolution_summary = %s,
+                    resolved_at = now(),
                     version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s AND status = %s
                 """,
                 (
                     TicketStatus.RESOLVED.value,
+                    ProcessingResult.ANSWERED.value,
                     message,
                     tenant_id,
                     row["ticket_id"],
@@ -875,6 +961,7 @@ class TicketWorkflowRepository:
                 actor_type=ActorType.SYSTEM,
                 approval_id=approval_id,
                 node_name="generate_rejection_response",
+                details={"processing_result": ProcessingResult.ANSWERED.value},
             )
             return message
 
@@ -886,13 +973,17 @@ class TicketWorkflowRepository:
                 """
                 UPDATE ticketpilot.tickets
                 SET status = CASE WHEN status = %s THEN status ELSE %s END,
+                    processing_result = CASE WHEN status = %s THEN processing_result ELSE %s END,
                     resolution_summary = CASE WHEN status = %s THEN resolution_summary ELSE %s END,
                     version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s AND active_run_id = %s AND run_started
+                RETURNING status, processing_result
                 """,
                 (
                     TicketStatus.WAITING_APPROVAL.value,
                     TicketStatus.FAILED.value,
+                    TicketStatus.WAITING_APPROVAL.value,
+                    ProcessingResult.PROCESSING_FAILED.value,
                     TicketStatus.WAITING_APPROVAL.value,
                     "Agent workflow failed; retry or staff review is required.",
                     tenant_id,
@@ -900,7 +991,8 @@ class TicketWorkflowRepository:
                     run_id,
                 ),
             )
-            if cursor.rowcount != 1:
+            result = await cursor.fetchone()
+            if result is None:
                 return
             await self._append_audit(
                 connection,
@@ -911,7 +1003,10 @@ class TicketWorkflowRepository:
                 AuditOutcome.FAILED,
                 actor_type=ActorType.SYSTEM,
                 node_name="handle_failure",
-                details={"error_code": error_code},
+                details={
+                    "error_code": error_code,
+                    "processing_result": result["processing_result"],
+                },
             )
 
     async def record_tool_result(

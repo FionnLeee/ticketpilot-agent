@@ -13,6 +13,14 @@ This project offers a template for you to easily build and run your own agents u
 
 ## Overview
 
+### TicketPilot extension
+
+This branch extends the upstream toolkit into an auditable customer-support agent backed by PostgreSQL. TicketPilot adds tenant-scoped ticket APIs, authorized order and policy tools, deterministic LangGraph risk routing, human approval for refund actions, idempotent mock execution, and a run audit timeline. Request retries reuse the original operation while a new customer message creates a new business action.
+
+Ticket lifecycle status and per-run processing result are modeled separately. API and Streamlit responses distinguish answered requests, missing input, pending approval, dependency failure, insufficient evidence, and unhandled processing failure. A database constraint prevents contradictory status/result pairs, so a dependency timeout cannot be reported as a resolved “order not found” answer.
+
+All TicketPilot demo orders, policies, identities, and refunds are synthetic. TicketPilot is derived from JoshuaC215's MIT-licensed `agent-service-toolkit`; the original license and copyright notice are retained. See the [Chinese TicketPilot overview](README.zh-CN.md) for current behavior and boundaries.
+
 ### [Try the app!](https://agent-service-toolkit.streamlit.app/)
 
 <a href="https://agent-service-toolkit.streamlit.app/"><img src="media/app_screenshot.png" width="600" alt="App screenshot"></a>
