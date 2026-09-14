@@ -58,13 +58,27 @@ def test_console_falls_back_to_docker_demo_identities(mock_agent_client, monkeyp
     assert not at.exception
 
 
+def test_console_defaults_to_the_token_source_the_backend_accepts(mock_agent_client, demo_tokens):
+    with patch("ticketpilot_streamlit.TicketPilotClient") as client_class:
+        ticket_client = client_class.return_value
+        ticket_client.probe_identity.side_effect = lambda token: (
+            "ok" if token == "demo-customer-token" else "unauthorized"
+        )
+        at = _open_console()
+
+    assert at.radio(key="ticketpilot_identity_source").value == "Docker 演示令牌"
+    assert at.selectbox(key="ticketpilot_identity").value == "客户 · customer-demo-01"
+    assert any("后端已接受该身份" in item.value for item in at.caption)
+    assert not at.exception
+
+
 def test_scenario_prefills_new_ticket_form(mock_agent_client, demo_tokens):
     at = _open_console()
 
     at.button(key="ticketpilot_scenario_vague_refund").click().run(timeout=10)
 
     assert at.text_input(key="ticketpilot_subject").value == "申请部分退款"
-    assert at.text_area(key="ticketpilot_message").value == "订单 TP-0013 我想退一部分钱。"
+    assert at.text_area(key="ticketpilot_message").value == "订单 TP-0013 我想申请部分退款。"
     assert at.text_input(key="ticketpilot_order_reference").value == "TP-0013"
     assert not at.exception
 
@@ -317,9 +331,9 @@ def test_follow_up_uses_chip_and_generated_key(mock_agent_client, demo_tokens):
         "thread_id": "thread-a",
         "status": "RESOLVED",
         "processing_result": "ANSWERED",
-        "subject": "查询物流",
-        "category": "ORDER_STATUS",
-        "risk_level": "READ_ONLY",
+        "subject": "申请退款",
+        "category": "REFUND",
+        "risk_level": "HIGH_RISK_WRITE",
         "order_reference": "TP-0013",
         "messages": [],
         "pending_approval": None,

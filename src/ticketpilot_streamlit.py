@@ -188,7 +188,7 @@ SCENARIOS = [
         "key": "vague_refund",
         "title": "🌗 模糊退款（不说金额）",
         "subject": "申请部分退款",
-        "message": "订单 TP-0013 我想退一部分钱。",
+        "message": "订单 TP-0013 我想申请部分退款。",
         "order_reference": "TP-0013",
         "expect": "缺金额：进入等待补充，不默认全额退款",
     },
@@ -209,6 +209,10 @@ FOLLOWUP_CHIPS = {
         ("取消退款", "算了，不退了。"),
     ],
     "RESOLVED": [
+        ("确认当前物流", "请再确认一下订单 {order} 现在的物流状态。"),
+        ("申请退款 100 元", "订单 {order} 申请退款 100 元。"),
+    ],
+    "RESOLVED:REFUND": [
         ("再次申请相同金额", "订单 {order} 再申请退款 100 元。"),
         ("确认当前物流", "请再确认一下订单 {order} 现在的物流状态。"),
     ],
@@ -282,6 +286,12 @@ def _badge(text: str, color: str) -> str:
     return f":{color}-badge[{text}]"
 
 
+def _triage_text(details: dict[str, Any]) -> str:
+    category = str(details.get("category") or "")
+    risk = str(details.get("risk_level") or "")
+    return f"{CATEGORY_LABELS.get(category, category)} · {RISK_LABELS.get(risk, risk)}"
+
+
 # --- identities -----------------------------------------------------------------
 
 
@@ -318,12 +328,24 @@ def _env_identities() -> list[dict[str, Any]]:
     return identities
 
 
-def _select_identity() -> dict[str, Any] | None:
+def _default_source(client: TicketPilotClient, env_identities: list[dict[str, Any]]) -> str:
+    # Pick whichever token set the running backend actually accepts, so a demo never
+    # starts on a 401 just because a local and a Docker backend swapped places on 8080.
+    if _probe_identity(client, env_identities[0]["token"]) == "ok":
+        return SOURCE_ENV
+    if _probe_identity(client, DEFAULT_IDENTITIES[0]["token"]) == "ok":
+        return SOURCE_DOCKER
+    return SOURCE_ENV
+
+
+def _select_identity(client: TicketPilotClient) -> dict[str, Any] | None:
     env_identities = _env_identities()
     if env_identities:
+        options = [SOURCE_ENV, SOURCE_DOCKER]
         source = st.radio(
             "令牌来源",
-            [SOURCE_ENV, SOURCE_DOCKER],
+            options,
+            index=options.index(_default_source(client, env_identities)),
             horizontal=True,
             key="ticketpilot_identity_source",
             help="本地 `run_service.py` 读取 .env 里的令牌；`docker compose` 演示后端使用 demo-*-token。两套令牌互不通用。",
@@ -484,7 +506,7 @@ def _render_sidebar(client: TicketPilotClient, base_url: str) -> dict[str, Any] 
         st.caption("演示环境 · 合成数据 · Mock 退款 · 身份切换仅用于本地演示，不是生产登录。")
 
         st.markdown("**演示身份**")
-        identity = _select_identity()
+        identity = _select_identity(client)
         _render_identity_status(client, identity)
 
         st.markdown("**演示场景**")
@@ -613,7 +635,8 @@ def _render_conversation(ticket: dict[str, Any]) -> None:
 
 
 def _followup_chips(ticket: dict[str, Any]) -> None:
-    chips = FOLLOWUP_CHIPS.get(str(ticket.get("status", "")), [])
+    status = str(ticket.get("status", ""))
+    chips = FOLLOWUP_CHIPS.get(f"{status}:{ticket.get('category')}") or FOLLOWUP_CHIPS.get(status)
     if not chips:
         return
     order = ticket.get("order_reference") or "TP-0013"
@@ -630,9 +653,10 @@ def _render_retry_result() -> None:
     kind = "创建工单" if result.get("kind") == "create" else "追加消息"
     if result.get("same_run"):
         st.success(
-            f"🔁 幂等验证通过：用同一个 Idempotency-Key 和同一正文重放“{kind}”请求，"
+            f"幂等验证通过：用同一个 Idempotency-Key 和同一正文重放“{kind}”请求，"
             f"服务端返回了同一个 run `{_short(result.get('run_id'))}`，"
-            "没有再次执行工作流，也没有产生新的消息、审批或退款。"
+            "没有再次执行工作流，也没有产生新的消息、审批或退款。",
+            icon="🔁",
         )
     else:
         st.warning(
@@ -676,7 +700,10 @@ def _replay_last_request(client: TicketPilotClient, token: str) -> None:
         _show_error(error)
 
 
-def _render_followup(client: TicketPilotClient, token: str, ticket: dict[str, Any]) -> None:
+def _render_followup(
+    client: TicketPilotClient, identity: dict[str, Any], ticket: dict[str, Any]
+) -> None:
+    token = identity["token"]
     status = str(ticket.get("status", ""))
     ticket_id = str(ticket.get("id", ""))
     st.markdown("**继续对话**")
@@ -684,6 +711,8 @@ def _render_followup(client: TicketPilotClient, token: str, ticket: dict[str, An
         st.info("工单正在等待人工审批，审批完成并恢复执行后才能继续追加消息。")
     elif status == "PROCESSING":
         st.info("工单正在处理中，请稍后刷新。")
+    elif identity.get("role") == "APPROVER":
+        st.info("审批员不能代客户发消息。请在左侧切换到“客户”身份后继续对话。")
     else:
         _followup_chips(ticket)
         st.session_state.setdefault("ticketpilot_followup_message", "")
@@ -729,7 +758,6 @@ def _render_followup(client: TicketPilotClient, token: str, ticket: dict[str, An
             width="stretch",
         ):
             _replay_last_request(client, token)
-    _render_retry_result()
 
 
 def _render_progress(ticket: dict[str, Any], events: list[dict[str, Any]]) -> None:
@@ -753,11 +781,7 @@ def _render_progress(ticket: dict[str, Any], events: list[dict[str, Any]]) -> No
     lines: list[str] = []
     triage = by_key.get("TICKET_TRIAGED")
     if triage:
-        details = triage.get("details") or {}
-        lines.append(
-            f"✅ **理解意图** · {CATEGORY_LABELS.get(details.get('category'), details.get('category', ''))}"
-            f" · {RISK_LABELS.get(details.get('risk_level'), details.get('risk_level', ''))}"
-        )
+        lines.append(f"✅ **理解意图** · {_triage_text(triage.get('details') or {})}")
     else:
         lines.append("⬜ **理解意图**")
 
@@ -820,9 +844,10 @@ def _render_order(ticket: dict[str, Any]) -> None:
     if not isinstance(order, dict):
         st.caption("本工单尚未绑定订单。")
         return
+    currency = order.get("currency") or ""
     left, right = st.columns(2)
-    left.metric("已支付", _format_amount(order.get("paid_amount"), order.get("currency")))
-    right.metric("当前可退", _format_amount(order.get("refundable_amount"), order.get("currency")))
+    left.metric(f"已支付（{currency}）", _format_amount(order.get("paid_amount")))
+    right.metric(f"当前可退（{currency}）", _format_amount(order.get("refundable_amount")))
     payment = str(order.get("payment_status", ""))
     fulfillment = str(order.get("fulfillment_status", ""))
     st.caption(
@@ -872,13 +897,12 @@ def _render_approval(
     payload = approval.get("action_payload") or {}
     st.markdown("**待审批的退款动作**")
     with st.container(border=True):
+        currency = payload.get("currency") or ""
         amount_col, balance_col = st.columns(2)
-        amount_col.metric(
-            "申请金额", _format_amount(payload.get("amount"), payload.get("currency"))
-        )
+        amount_col.metric(f"申请金额（{currency}）", _format_amount(payload.get("amount")))
         order = ticket.get("order") or {}
         balance_col.metric(
-            "当前可退", _format_amount(order.get("refundable_amount"), order.get("currency"))
+            f"当前可退（{currency}）", _format_amount(order.get("refundable_amount"))
         )
         st.caption(
             f"订单 `{payload.get('order_reference', '-')}` · action `{_short(payload.get('action_id'))}` · "
@@ -931,10 +955,7 @@ def _event_summary(event: dict[str, Any]) -> str:
     event_type = str(event.get("event_type", ""))
     tool = TOOL_LABELS.get(str(event.get("tool_name", "")), event.get("tool_name"))
     if event_type == "TICKET_TRIAGED":
-        return (
-            f"{CATEGORY_LABELS.get(details.get('category'), details.get('category', ''))} · "
-            f"{RISK_LABELS.get(details.get('risk_level'), details.get('risk_level', ''))}"
-        )
+        return _triage_text(details)
     if event_type in {"TOOL_SUCCEEDED", "TOOL_FAILED"}:
         parts = [str(tool)] if tool else []
         if "found" in details:
@@ -962,7 +983,9 @@ def _event_summary(event: dict[str, Any]) -> str:
         return str(details.get("error_code", ""))
     if event_type == "TICKET_CREATED":
         return "已指定订单" if details.get("order_linked") else "未指定订单"
-    if event_type == "MESSAGE_ADDED":
+    if event_type == "TICKET_RESOLVED":
+        return f"{details.get('citation_count', 0)} 条政策引用"
+    if event_type in {"MESSAGE_ADDED", "RUN_STARTED", "TICKET_INFORMATION_REQUESTED"}:
         return ""
     return " · ".join(f"{key}={value}" for key, value in list(details.items())[:3])
 
@@ -1106,12 +1129,13 @@ def render_ticketpilot_console(base_url: str) -> None:
     ticket_id = str(ticket.get("id", ""))
     events = _merged_events(ticket_id)
     _render_header(ticket)
+    _render_retry_result()
     chat_col, context_col = st.columns([7, 5], gap="large")
     with chat_col:
         st.markdown("**对话**")
         _render_conversation(ticket)
         st.divider()
-        _render_followup(client, identity["token"], ticket)
+        _render_followup(client, identity, ticket)
     with context_col:
         with st.container(border=True):
             _render_progress(ticket, events)

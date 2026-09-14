@@ -1,264 +1,190 @@
-# 🧰 AI Agent Service Toolkit
+# TicketPilot: a multi-tenant after-sales support agent with human-approved refunds
 
-[![build status](https://github.com/JoshuaC215/agent-service-toolkit/actions/workflows/test.yml/badge.svg)](https://github.com/JoshuaC215/agent-service-toolkit/actions/workflows/test.yml) [![codecov](https://codecov.io/github/JoshuaC215/agent-service-toolkit/graph/badge.svg?token=5MTJSYWD05)](https://codecov.io/github/JoshuaC215/agent-service-toolkit) [![Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FJoshuaC215%2Fagent-service-toolkit%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/pyproject.toml)
-[![GitHub License](https://img.shields.io/github/license/JoshuaC215/agent-service-toolkit)](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/LICENSE) [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://agent-service-toolkit.streamlit.app/)
+English | [简体中文](README.zh-CN.md)
 
-A full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit.
+> Built on the MIT-licensed [`agent-service-toolkit`](https://github.com/JoshuaC215/agent-service-toolkit).
+> **The model understands language; deterministic code, PostgreSQL and a human approver own permissions, state and side effects.**
 
-It includes a [LangGraph](https://langchain-ai.github.io/langgraph/) agent, a [FastAPI](https://fastapi.tiangolo.com/) service to serve it, a client to interact with the service, and a [Streamlit](https://streamlit.io/) app that uses the client to provide a chat interface. Data structures and settings are built with [Pydantic](https://github.com/pydantic/pydantic).
+`Python 3.12 · FastAPI · LangGraph · PostgreSQL · Streamlit · Docker Compose · Playwright`
 
-This project offers a template for you to easily build and run your own agents using the LangGraph framework. It demonstrates a complete setup from agent definition to user interface, making it easier to get started with LangGraph-based projects by providing a full, robust toolkit.
+<img src="media/ticketpilot/07-second-refund-overview.png" width="900" alt="TicketPilot workbench after a second same-amount refund was executed as a new action">
 
-**[🎥 Watch a video walkthrough of the repo and app](https://www.youtube.com/watch?v=pdYVHw_YCNY)**
+## The problem
 
-## Overview
+Customers ask about shipping, policies and refunds in natural language. Letting an LLM act on the order system directly creates three risks: reading another tenant's orders, treating "I mentioned a refund" as "I requested a refund", and double refunds caused by retries or concurrent messages. TicketPilot hands those risks to code and database constraints instead of prompts:
 
-### TicketPilot extension
+- **Authorization** – a bearer token resolves to a trusted `tenant / actor / role`; cross-tenant or cross-customer access is a uniform 404, and the dedicated mode unmounts every generic agent route from upstream.
+- **Intent boundaries** – a refund proposal is only created when the model returns an explicit amount or an explicit full-refund flag; a missing order, missing amount, negated refund or order conflict ends in "waiting for input" or a plain answer, never an approval.
+- **Side effects** – refunds always pause for human approval (LangGraph `interrupt()`, resumed from the checkpoint after the decision) and re-verify order facts before executing. Two idempotency layers separate "retry of the same request" from "asking for the same amount again".
 
-This branch extends the upstream toolkit into an auditable customer-support agent backed by PostgreSQL. TicketPilot adds tenant-scoped ticket APIs, authorized order and policy tools, deterministic LangGraph risk routing, human approval for refund actions, idempotent mock execution, and a run audit timeline. Request retries reuse the original operation while a new customer message creates a new business action.
+## The main path in 30 seconds
 
-Ticket lifecycle status and per-run processing result are modeled separately. API and Streamlit responses distinguish answered requests, missing input, pending approval, dependency failure, insufficient evidence, and unhandled processing failure. A database constraint prevents contradictory status/result pairs, so a dependency timeout cannot be reported as a resolved “order not found” answer.
+```text
+customer message ──► POST /v1/tickets (Idempotency-Key)
+                       │  token → tenant/actor/role; same key + same body → original ticket/run
+                       ▼
+             reserve the active run (conditional update: one executor per ticket)
+                       ▼
+   LangGraph: classify → order tool → policy retrieval → plan
+                       │
+     ├─ read-only  ──► grounded answer (ANSWERED) or explicit missing-evidence / dependency failure
+     ├─ missing info ─► WAITING_INFORMATION (NEEDS_INPUT); the next message fills the slot
+     └─ refund     ──► PENDING approval row → interrupt() (WAITING_APPROVAL)
+                                 ▼
+               approver POST /v1/approvals/{id}:decide
+                                 ▼
+        Command(resume) from checkpoint → re-verify order → mock refund once → audit
+```
 
-All TicketPilot demo orders, policies, identities, and refunds are synthetic. TicketPilot is derived from JoshuaC215's MIT-licensed `agent-service-toolkit`; the original license and copyright notice are retained. See the [Chinese TicketPilot overview](README.zh-CN.md) for current behavior and boundaries.
+Ticket status (`NEW / PROCESSING / WAITING_INFORMATION / WAITING_APPROVAL / RESOLVED / FAILED`) and the per-run processing result (`ANSWERED / NEEDS_INPUT / WAITING_APPROVAL / DEPENDENCY_FAILED / INSUFFICIENT_EVIDENCE / PROCESSING_FAILED`) are separate dimensions with a database check on legal pairs, so an order-service timeout can never be reported as "order not found" or "resolved".
 
-### [Try the app!](https://agent-service-toolkit.streamlit.app/)
+## Architecture
 
-<a href="https://agent-service-toolkit.streamlit.app/"><img src="media/app_screenshot.png" width="600" alt="App screenshot"></a>
+```mermaid
+flowchart TB
+    W["Streamlit workbench (demo)<br/>identity switch · scenarios · chat · approval card · audit timeline"]
+    API["FastAPI · TicketPilot dedicated mode<br/>only /v1/tickets · /v1/tickets/{id}/messages · /v1/approvals/{id}:decide · /v1/runs/{id}/events"]
+    P["bearer token → trusted tenant / actor / role"]
+    S["TicketService + repositories<br/>transactions · row locks · two idempotency layers · active-run ownership · pre-execution re-verification"]
+    DB[("PostgreSQL business tables<br/>tickets · messages · orders · approvals · audit_events")]
+    LG["LangGraph ticket graph<br/>classify → query_order → search_policy → plan_work<br/>→ read-only: grounded answer → finalize<br/>→ refund: create_pending_approval → interrupt() ⏸ → after decision Command(resume) → verify → execute_refund_mock"]
+    CK[("LangGraph checkpoint")]
+    M["reasoner: real model or deterministic demo"]
+    W --> API --> P --> S
+    S <--> DB
+    S --> LG
+    LG <--> DB
+    LG --- CK
+    LG -.-> M
+```
 
-### Quickstart
+Approval sequence (the last four steps show retry vs. a new same-amount request):
 
-Run directly in python
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Customer
+    participant API as FastAPI
+    participant DB as PostgreSQL
+    participant G as LangGraph
+    participant H as Approver
+    C->>API: POST /v1/tickets/{id}/messages "100 CNY" + Idempotency-Key
+    API->>DB: insert message, reserve active_run_id (conditional update)
+    API->>G: ainvoke(run_id, thread_id)
+    G->>DB: classify / order tool / policy tool → audit events
+    G->>DB: PENDING approval keyed by action_id = message_id
+    G-->>API: interrupt(), ticket WAITING_APPROVAL
+    API-->>C: 200 · processing_result = WAITING_APPROVAL
+    H->>API: POST /v1/approvals/{id}:decide APPROVE
+    API->>DB: lock approval row → APPROVED, reserve a new run
+    API->>G: Command(resume) from the checkpoint
+    G->>DB: re-verify balance / currency / status → deduct once → REFUND_EXECUTED
+    C->>API: resend the same request (same key, same body)
+    API-->>C: original run returned, nothing re-executed
+    C->>API: new message "refund 100 again" (new key)
+    API->>G: new message → new action_id → new approval
+```
+
+## What I built vs. what upstream provides
+
+| Layer | Upstream `agent-service-toolkit` | Added here |
+| --- | --- | --- |
+| Service | FastAPI service, agent registry, SSE streaming, Streamlit chat UI, Docker Compose | `TICKETPILOT_ENABLED` dedicated mode: only `/v1` business routes, `/info`, `/health`; generic routes answer 404 |
+| Workflow | `interrupt()` / `Command(resume)` samples, PostgreSQL checkpointer | Ticket graph: classification, order/policy tools, risk routing, approval pause/resume, result semantics |
+| Persistence | checkpoint and store wiring | Separate business pool, 6 versioned migrations, tickets/messages/orders/approvals/audit tables with constraints |
+| Identity | optional bearer check | `TICKETPILOT_AUTH_TOKENS` → `RequestPrincipal`; ownership pushed into SQL; role checks |
+| Reliability | — | request idempotency, refund-action idempotency, active-run ownership, approval replay, pre-execution re-verification |
+| Evaluation | — | 18 + 6 synthetic Chinese samples, deterministic scorer, reproducible real-model evaluation script |
+| Demo | generic chat page | role-aware workbench (identity switch, scenario buttons, approval card, audit timeline), API and browser golden-path scripts |
+
+See [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md) for the full attribution and [`UPSTREAM.md`](UPSTREAM.md) for provenance. Upstream capabilities are not claimed as my own work.
+
+## Reliability work, with evidence
+
+| Item | Problem | Design | Evidence |
+| --- | --- | --- | --- |
+| P0-A route isolation | `/v1` was authorized, but upstream `history / threads / invoke / stream` could still reach the same checkpoints | dedicated mode mounts no generic routes and loads no generic agents; 401 without identity, 404 across tenants, rejected requests write nothing | `tests/service/test_ticketpilot_isolation.py`, `tests/ticketpilot/test_api_isolation.py` |
+| P0-B refund semantics | a "refund" keyword overrode the model's classification and a missing amount defaulted to the full balance | trust only structured output; propose only with an explicit amount or full-refund flag; bounded multi-turn slot filling via `pending_request`; cancellations and topic changes do not inherit | `tests/ticketpilot/test_refund_intent.py`, `test_workflow_graph.py` |
+| P0-C run ownership | with two interleaved messages the graph read "the latest message" instead of its trigger; a late failure of an old run could overwrite the new state | bind message ↔ run, reserve `active_run_id` in a short transaction, run the long task outside it, check ownership on every write; a new message during execution gets 409 | `tests/ticketpilot/test_run_ownership.py` (barrier-driven interleaving) |
+| P0-D two idempotency layers | `ticket + order + amount` could not tell a retry from a second refund | request layer: `tenant + actor + Idempotency-Key` + body digest; action layer: the triggering message id is the `action_id`; unique constraints in the database | `tests/ticketpilot/test_ticket_repository.py`, `migrations/0005` |
+| P1-A result semantics | timeouts, missing evidence and missing input all ended as `RESOLVED` | six `processing_result` values separate from ticket status, checked in the database, surfaced in the UI | `migrations/0006`, `tests/ticketpilot/test_workflow_graph.py` |
+
+Not claimed: exactly-once across a real payment provider (the refund is a mock; a real one needs a provider idempotency key, an outbox and reconciliation) and automatic takeover after a hard kill (a claimed run needs a recovery mechanism).
+
+## Real-model evaluation
+
+`scripts/evaluate_ticketpilot_classification.py` evaluates the real `LangChainTicketReasoner` on intent classification and slot extraction. A sample counts as correct only when all four fields (intent, order reference, explicit amount, full-refund flag) match; the report records model, temperature, data and code hashes, per-sample output and latency.
+
+| Samples | Prompt v1 | Prompt v2 |
+| --- | ---: | ---: |
+| 18-sample dev set | 15/18 | 18/18 |
+| 6 targeted transfer samples | 4/6 | 5/6 |
+
+Single run on 2026-09-14 with `qwen3.7-flash`, temperature 0.5, about 13–15 s per sample. v2 changes only the system prompt (explicit full-refund flag, known-order inheritance, bare-order-number routing); the three original errors are fixed with no regressions, while one paraphrase of "refund everything I paid" still misses the flag and is kept as a known limitation. These are dev-set numbers, not production accuracy. Details in [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md).
+
+One integration finding: the OpenAI-compatible provider rejected the JSON Schema regex generated for `Decimal` before the model ever answered; the wire schema now uses `number | null` and Pydantic still validates positivity, two decimals and the upper bound after the response.
+
+## Quickstart
+
+One-command demo stack (deterministic reasoner, no model API key needed):
 
 ```sh
-# At least one LLM API key is required
-echo 'OPENAI_API_KEY=your_openai_api_key' >> .env
+cp .env.example .env            # keep at least the POSTGRES_* defaults
+docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml up -d --build
+```
 
-# uv is the recommended way to install agent-service-toolkit, but "pip install ." also works
-# For uv installation options, see: https://docs.astral.sh/uv/getting-started/installation/
-curl -LsSf https://astral.sh/uv/0.11.32/install.sh | sh
+Open `http://localhost:8501` and follow the five-minute script in [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md) (Chinese). Real-model mode (`TICKETPILOT_REASONER_MODE=llm` with `DEFAULT_MODEL` pointing at your provider) is described in section 2 of the same document.
 
-# Install dependencies. "uv sync" creates .venv automatically
+Automated acceptance:
+
+```sh
+uv run python scripts/ticketpilot_demo.py                          # API golden path
+uv run --with playwright python scripts/ticketpilot_ui_e2e.py      # browser golden path, regenerates screenshots
+```
+
+## Screenshots
+
+| Vague refund → waiting for input | Approver view | Cross-tenant lookup → 404 |
+| --- | --- | --- |
+| <img src="media/ticketpilot/03-needs-input.png" width="290"> | <img src="media/ticketpilot/05-approver-view.png" width="290"> | <img src="media/ticketpilot/08-cross-tenant-404.png" width="290"> |
+
+All screenshots live in [`media/ticketpilot/`](media/ticketpilot/) and are produced by `scripts/ticketpilot_ui_e2e.py`. The UI is in Chinese.
+
+## Tests
+
+```sh
 uv sync --frozen
-source .venv/bin/activate
-python src/run_service.py
-
-# In another shell
-source .venv/bin/activate
-streamlit run src/streamlit_app.py
+uv run pytest                                  # default: no PostgreSQL required
+uv run pytest tests/ticketpilot --run-docker   # needs the compose PostgreSQL
+uv run ruff check src tests scripts
 ```
 
-Run with docker
+Results on 2026-09-14, Windows 11 / Python 3.12: default suite `287 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `104 passed` (35 of them run only with `--run-docker`); service isolation 8 passed; browser golden path 8/8 steps in about 55 s. The numbers come from different test selections and must not be summed.
+
+## Layout
+
+```text
+src/ticketpilot/             business code: api / services / repositories / workflow_repository / graph / tools / reasoning / schemas / domain
+src/ticketpilot_streamlit.py demo workbench
+src/client/ticketpilot.py    business API client
+migrations/ticketpilot/      versioned SQL migrations 0001–0006
+data/ticketpilot/            synthetic order manifest, synthetic policy corpus, classification eval sets
+scripts/                     ticketpilot_demo.py (API acceptance), ticketpilot_ui_e2e.py (browser acceptance), evaluate_ticketpilot_classification.py
+tests/ticketpilot/           API, isolation, repository, run ownership, refund semantics, graph and scorer tests
+docs/                        ARCHITECTURE, CONTRIBUTION_MAP, DATASET_STRATEGY, TICKETPILOT_DEMO, adr/
+```
+
+## Upstream toolkit and generic mode
+
+With `TICKETPILOT_ENABLED=false` the repository is still the full upstream toolkit (multiple agents, SSE streaming, AG-UI, a RAG sample, voice); see the [upstream README](https://github.com/JoshuaC215/agent-service-toolkit#readme). Do not expose an instance that holds TicketPilot data in generic mode: the dedicated mode is an application boundary built by unmounting routes, not physical isolation of historical checkpoints.
 
 ```sh
-echo 'OPENAI_API_KEY=your_openai_api_key' >> .env
-docker compose watch
+uv sync --frozen
+uv run python src/run_service.py          # FastAPI on 8080
+uv run streamlit run src/streamlit_app.py # Streamlit on 8501
+docker compose watch                      # or: full stack with live reload
 ```
-
-### Architecture Diagram
-
-<img src="media/agent_architecture.png" width="600" alt="Agent architecture diagram">
-
-### Key Features
-
-1. **LangGraph Agent and latest features**: A customizable agent built using the LangGraph framework. Implements the latest LangGraph v1.0 features including human in the loop with `interrupt()`, flow control with `Command`, long-term memory with `Store`, and `langgraph-supervisor`.
-1. **FastAPI Service**: Serves the agent with both streaming and non-streaming endpoints.
-1. **Advanced Streaming**: A novel approach to support both token-based and message-based streaming.
-1. **AG-UI Protocol Support**: Every agent is also served over the [AG-UI protocol](https://docs.ag-ui.com) for connecting AG-UI compatible frontends like CopilotKit - see [docs](docs/AGUI.md).
-1. **Streamlit Interface**: Provides a user-friendly chat interface for interacting with the agent, including voice input and output.
-1. **Multiple Agent Support**: Run multiple agents in the service and call by URL path. Available agents and models are described in `/info`
-1. **Asynchronous Design**: Utilizes async/await for efficient handling of concurrent requests.
-1. **Content Moderation**: Implements Safeguard for content moderation (requires Groq API key).
-1. **RAG Agent**: A basic RAG agent implementation using ChromaDB - see [docs](docs/RAG_Assistant.md).
-1. **Chat History**: Lists a user's previous conversations per agent via `/threads`, with a "Previous Chats" sidebar in the Streamlit app.
-1. **Feedback Mechanism**: Includes a star-based feedback system integrated with LangSmith.
-1. **Docker Support**: Includes Dockerfiles and a docker compose file for easy development and deployment.
-1. **Testing**: Includes robust unit and integration tests for the full repo.
-
-### Key Files
-
-The repository is structured as follows:
-
-- `src/agents/`: Defines several agents with different capabilities
-- `src/schema/`: Defines the protocol schema
-- `src/core/`: Core modules including LLM definition and settings
-- `src/service/service.py`: FastAPI service to serve the agents
-- `src/client/client.py`: Client to interact with the agent service
-- `src/streamlit_app.py`: Streamlit app providing a chat interface
-- `tests/`: Unit and integration tests
-
-## Setup and Usage
-
-1. Clone the repository:
-
-   ```sh
-   git clone https://github.com/JoshuaC215/agent-service-toolkit.git
-   cd agent-service-toolkit
-   ```
-
-2. Set up environment variables:
-   Create a `.env` file in the root directory. At least one LLM API key or configuration is required. See the [`.env.example` file](./.env.example) for a full list of available environment variables, including a variety of model provider API keys, header-based authentication, LangSmith tracing, testing and development modes, and OpenWeatherMap API key.
-
-3. You can now run the agent service and the Streamlit app locally, either with Docker or just using Python. The Docker setup is recommended for simpler environment setup and immediate reloading of the services when you make changes to your code.
-
-### Additional setup for specific AI providers
-
-- [Setting up Ollama](docs/Ollama.md)
-- [Setting up VertexAI](docs/VertexAI.md)
-- [Setting up RAG with ChromaDB](docs/RAG_Assistant.md)
-
-### Building or customizing your own agent
-
-To customize the agent for your own use case:
-
-1. Add your new agent to the `src/agents` directory. You can copy `research_assistant.py` or `chatbot.py` and modify it to change the agent's behavior and tools.
-1. Import and add your new agent to the `agents` dictionary in `src/agents/agents.py`. Your agent can be called by `/<your_agent_name>/invoke` or `/<your_agent_name>/stream`.
-1. Adjust the Streamlit interface in `src/streamlit_app.py` to match your agent's capabilities.
-
-### Handling Private Credential files
-
-If your agents or chosen LLM require file-based credential files or certificates, the `privatecredentials/` has been provided for your development convenience. All contents, excluding the `.gitkeep` files, are ignored by git and docker's build process. See [Working with File-based Credentials](docs/File_Based_Credentials.md) for suggested use.
-
-### Docker Setup
-
-This project includes a Docker setup for easy development and deployment. The `compose.yaml` file defines three services: `postgres`, `agent_service` and `streamlit_app`. The `Dockerfile` for each service is in their respective directories.
-
-For local development, we recommend using [docker compose watch](https://docs.docker.com/compose/file-watch/). This feature allows for a smoother development experience by automatically updating your containers when changes are detected in your source code.
-
-1. Make sure you have Docker and Docker Compose (>= [v2.23.0](https://docs.docker.com/compose/release-notes/#2230)) installed on your system.
-
-2. Create a `.env` file from the `.env.example`. At minimum, you need to provide an LLM API key (e.g., OPENAI_API_KEY).
-
-   ```sh
-   cp .env.example .env
-   # Edit .env to add your API keys
-   ```
-
-3. Build and launch the services in watch mode:
-
-   ```sh
-   docker compose watch
-   ```
-
-   This will automatically:
-   - Start a PostgreSQL database service that the agent service connects to
-   - Start the agent service with FastAPI
-   - Start the Streamlit app for the user interface
-
-4. The services will now automatically update when you make changes to your code:
-   - Changes in the relevant python files and directories will trigger updates for the relevant services.
-   - NOTE: If you make changes to the `pyproject.toml` or `uv.lock` files, you will need to rebuild the services by running `docker compose up --build`.
-
-5. Access the Streamlit app by navigating to `http://localhost:8501` in your web browser.
-
-6. The agent service API will be available at `http://0.0.0.0:8080`. You can also use the OpenAPI docs at `http://0.0.0.0:8080/redoc`.
-
-7. Use `docker compose down` to stop the services.
-
-This setup allows you to develop and test your changes in real-time without manually restarting the services.
-
-### Building other apps on the AgentClient
-
-The repo includes a generic `src/client/client.AgentClient` that can be used to interact with the agent service. This client is designed to be flexible and can be used to build other apps on top of the agent. It supports both synchronous and asynchronous invocations, and streaming and non-streaming requests.
-
-See the `src/run_client.py` file for full examples of how to use the `AgentClient`. A quick example:
-
-```python
-from client import AgentClient
-client = AgentClient()
-
-response = client.invoke("Tell me a brief joke?")
-response.pretty_print()
-# ================================== Ai Message ==================================
-#
-# A man walked into a library and asked the librarian, "Do you have any books on Pavlov's dogs and Schrödinger's cat?"
-# The librarian replied, "It rings a bell, but I'm not sure if it's here or not."
-
-```
-
-### Development with LangGraph Studio
-
-The agent supports [LangGraph Studio](https://langchain-ai.github.io/langgraph/concepts/langgraph_studio/), the IDE for developing agents in LangGraph.
-
-`langgraph-cli[inmem]` is installed with `uv sync`. You can simply add your `.env` file to the root directory as described above, and then launch LangGraph Studio with `langgraph dev`. Customize `langgraph.json` as needed. See the [local quickstart](https://langchain-ai.github.io/langgraph/cloud/how-tos/studio/quick_start/#local-development-server) to learn more.
-
-### Local development without Docker
-
-You can also run the agent service and the Streamlit app locally without Docker, just using a Python virtual environment.
-
-1. Create a virtual environment and install dependencies:
-
-   ```sh
-   uv sync --frozen
-   source .venv/bin/activate
-   ```
-
-2. Run the FastAPI server:
-
-   ```sh
-   python src/run_service.py
-   ```
-
-3. In a separate terminal, run the Streamlit app:
-
-   ```sh
-   streamlit run src/streamlit_app.py
-   ```
-
-4. Open your browser and navigate to the URL provided by Streamlit (usually `http://localhost:8501`).
-
-## Projects built with or inspired by agent-service-toolkit
-
-The following are a few of the public projects that drew code or inspiration from this repo.
-
-- **[PolyRAG](https://github.com/QuentinFuxa/PolyRAG)** - Extends agent-service-toolkit with RAG capabilities over both PostgreSQL databases and PDF documents.
-- **[alexrisch/agent-web-kit](https://github.com/alexrisch/agent-web-kit)** - A Next.JS frontend for agent-service-toolkit
-- **[raushan-in/dapa](https://github.com/raushan-in/dapa)** - Digital Arrest Protection App (DAPA) enables users to report financial scams and frauds efficiently via a user-friendly platform.
-
-**Please create a pull request editing the README or open a discussion with any new ones to be added!** Would love to include more projects.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-**A note on how this repo is maintained:** this is a solo-maintainer project, and issues, PRs, and discussions are triaged on a roughly biweekly cycle with help from an AI maintenance agent. Thanks for your patience if responses take a week or two — I will do my best to respond to truly urgent issues (vulnerability reports, etc.) or in-progress PRs within a few days. The full automation playbooks are versioned in [`docs/maintenance/`](docs/maintenance/) if you're curious how it works.
-
-Currently the tests need to be run using the local development without Docker setup. To run the tests for the agent service:
-
-1. Ensure you're in the project root directory and have activated your virtual environment.
-
-2. Install the development dependencies and pre-commit hooks:
-
-   ```sh
-   uv sync --frozen
-   pre-commit install
-   ```
-
-3. Run the tests using pytest:
-
-   ```sh
-   pytest
-   ```
-
-### Smoke testing optional dependencies
-
-Some integrations aren't exercised by the unit suite or the default CI run because they
-need real infrastructure: the Postgres and MongoDB checkpointers, the AG-UI endpoint, and
-LangFuse tracing. `scripts/smoke_test.sh` spins up each dependency in Docker, runs the
-service against it, verifies the integration end-to-end (including a check that the
-intended backend was actually used, not a silent SQLite fallback), and tears it down.
-
-```sh
-./scripts/smoke_test.sh                 # default: postgres, mongo, agui
-./scripts/smoke_test.sh mongo           # a single target
-./scripts/smoke_test.sh langfuse        # heavy: starts LangFuse's full self-host stack
-./scripts/smoke_test.sh all             # everything, including langfuse
-```
-
-These are opt-in confidence checks for a maintainer or agent — not part of CI. Run the
-target that matches what you changed rather than the whole set. The optional add-on
-compose files live in `docker/` (e.g. `docker/compose.mongo.yaml`), layered on top of the
-default `compose.yaml` so the default stack stays lightweight.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT, with the upstream copyright notice retained; see [`LICENSE`](LICENSE) and [`UPSTREAM.md`](UPSTREAM.md). All demo data is synthetic.
