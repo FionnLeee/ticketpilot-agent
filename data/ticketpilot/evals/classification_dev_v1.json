@@ -1,0 +1,224 @@
+{
+  "dataset_id": "ticketpilot-classification-dev-v1",
+  "split": "development",
+  "provenance": "First-party synthetic cases authored for TicketPilot; no real customer data.",
+  "label_policy": "Score category, order reference, explicitly requested amount and full-refund intent. Bare order references route to ORDER_STATUS. Preserve known order unless explicitly overridden. Priority is excluded: production prompt has no priority policy.",
+  "cases": [
+    {
+      "case_id": "C01",
+      "scenario_family": "logistics",
+      "message": "订单 TP-0009 到哪了？",
+      "known_order_reference": null,
+      "expected": {
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-0009",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C02",
+      "scenario_family": "known_order",
+      "message": "我的包裹什么时候送到？",
+      "known_order_reference": "TP-0009",
+      "expected": {
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-0009",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C03",
+      "scenario_family": "amount",
+      "message": "订单 TP-0005 请退款100元。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": "100",
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C04",
+      "scenario_family": "full",
+      "message": "订单 TP-0005 我要全额退款。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": null,
+        "full_refund_requested": true
+      }
+    },
+    {
+      "case_id": "C05",
+      "scenario_family": "partial",
+      "message": "订单 TP-0005 我想退一部分钱。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C06",
+      "scenario_family": "policy",
+      "message": "退款规则是什么？",
+      "known_order_reference": null,
+      "expected": {
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C07",
+      "scenario_family": "negation",
+      "message": "订单 TP-0009 不要退款，只查物流。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-0009",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C08",
+      "scenario_family": "cancel",
+      "message": "取消退款申请，不用退了。",
+      "known_order_reference": "TP-0005",
+      "expected": {
+        "category": "OTHER",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C09",
+      "scenario_family": "bare",
+      "message": "TP-0005",
+      "known_order_reference": null,
+      "expected": {
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C10",
+      "scenario_family": "order_digits",
+      "message": "订单 TP-1234 我要退款。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-1234",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C11",
+      "scenario_family": "date",
+      "message": "9月12日买的订单 TP-0005 我要退款。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C12",
+      "scenario_family": "policy_only",
+      "message": "能不能退款？我只是问规则，暂时不申请。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C13",
+      "scenario_family": "missing",
+      "message": "我要退款。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": null,
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C14",
+      "scenario_family": "override",
+      "message": "查一下订单 TP-0009 的物流。",
+      "known_order_reference": "TP-0005",
+      "expected": {
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-0009",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C15",
+      "scenario_family": "balance",
+      "message": "订单 TP-0005 账户余额500元，我想退款，金额还没决定。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C16",
+      "scenario_family": "other",
+      "message": "谢谢你的帮助。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C17",
+      "scenario_family": "decimal",
+      "message": "订单 TP-0005 请退12.50元。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": "12.50",
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "C18",
+      "scenario_family": "explicit_amount",
+      "message": "订单 TP-0005 实付200元，请只退款20元。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0005",
+        "requested_refund_amount": "20",
+        "full_refund_requested": false
+      }
+    }
+  ]
+}

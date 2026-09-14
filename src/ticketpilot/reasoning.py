@@ -1,12 +1,14 @@
 import json
 import re
 from decimal import Decimal, InvalidOperation
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_openai import ChatOpenAI
 
 from core import get_model, settings
+from schema.models import OpenAICompatibleName
 from ticketpilot.domain import TicketCategory, TicketPriority
 from ticketpilot.schemas import Citation, TicketClassification
 
@@ -140,7 +142,19 @@ class LangChainTicketReasoner:
     ) -> TicketClassification:
         model_name = config.get("configurable", {}).get("model", settings.DEFAULT_MODEL)
         model = get_model(model_name)
-        runnable = model.with_structured_output(TicketClassification)
+        if model_name == OpenAICompatibleName.OPENAI_COMPATIBLE:
+            # Decimal's generated regex is unsupported by some compatible schema decoders.
+            wire_schema = TicketClassification.model_json_schema()
+            wire_schema["properties"]["requested_refund_amount"] = {
+                "anyOf": [{"type": "number"}, {"type": "null"}],
+                "default": None,
+                "description": "Explicit refund amount, positive with at most two decimal places.",
+            }
+            runnable = cast(ChatOpenAI, model).with_structured_output(
+                wire_schema, method="json_schema"
+            )
+        else:
+            runnable = model.with_structured_output(TicketClassification)
         response = await runnable.ainvoke(
             [
                 SystemMessage(

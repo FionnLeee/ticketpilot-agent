@@ -21,6 +21,8 @@
 
 TicketPilot 专用演示数据和政策都是合成数据，不包含真实客户信息；确定性 demo reasoner 只用于 E2E，不代表模型质量。
 
+真实模型分类开发评测已提供 [18 条合成样本、评分契约与运行方式](data/ticketpilot/evals/README.md)。评分覆盖意图、订单号、退款金额和全额标志，保留逐条错误与耗时；它不代表端到端或线上准确率。
+
 设置 `TICKETPILOT_ENABLED=true` 并重启后，服务进入专用模式：保留 `/v1` 业务接口、`/info` 和 `/health`，不挂载通用 invoke、stream、history、threads、feedback 及 AG-UI 路由（请求返回 404）。Streamlit 新会话直接进入业务控制台；已有页面需要清除会话缓存后重载。业务接口始终使用 `TICKETPILOT_AUTH_TOKENS` 校验身份，`AUTH_SECRET` 不能替代业务授权。
 
 这是通过关闭通用入口实现的应用边界，并未迁移或物理隔离历史 checkpoint。需要运行上游通用示例时，使用独立数据库／checkpoint 存储启动另一实例；不要将保存了 TicketPilot 数据的实例切回通用模式对外开放。`/info` 的 `ticketpilot_enabled` 字段供界面识别模式；旧服务未提供时客户端默认按通用模式处理。
