@@ -144,11 +144,15 @@ uv run --with playwright python scripts/ticketpilot_ui_e2e.py      # browser gol
 
 ## Screenshots
 
+Real-model mode (`qwen3.7-flash`, local backend): the answer only uses facts returned by the order tool and the retrieved policy chunk, the tracking number is masked, and the citation can be expanded next to the reply.
+
+<img src="media/ticketpilot/llm-01-logistics-answered.png" width="900" alt="Shipping query answered in real-model mode">
+
 | Vague refund → waiting for input | Approver view | Cross-tenant lookup → 404 |
 | --- | --- | --- |
 | <img src="media/ticketpilot/03-needs-input.png" width="290"> | <img src="media/ticketpilot/05-approver-view.png" width="290"> | <img src="media/ticketpilot/08-cross-tenant-404.png" width="290"> |
 
-All screenshots live in [`media/ticketpilot/`](media/ticketpilot/) and are produced by `scripts/ticketpilot_ui_e2e.py`. The UI is in Chinese.
+All screenshots live in [`media/ticketpilot/`](media/ticketpilot/) and are produced by `scripts/ticketpilot_ui_e2e.py`; the `llm-*` ones come from the real-model backend, the rest from the deterministic demo backend. The same golden path passes on both (55 s deterministic, 108 s with the real model). The UI is in Chinese.
 
 ## Tests
 

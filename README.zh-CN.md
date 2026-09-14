@@ -144,11 +144,15 @@ uv run --with playwright python scripts/ticketpilot_ui_e2e.py      # 浏览器�
 
 ## 演示截图
 
+真实模型模式（`qwen3.7-flash`，本机后端）下的物流查询：模型只用订单 Tool 返回的事实和检索到的政策片段作答，运单号已脱敏，回答旁可展开引用。
+
+<img src="media/ticketpilot/llm-01-logistics-answered.png" width="900" alt="真实模型模式下的物流查询回答">
+
 | 模糊退款进入「等待补充」 | 审批员视角 | 跨租户访问统一 404 |
 | --- | --- | --- |
 | <img src="media/ticketpilot/03-needs-input.png" width="290"> | <img src="media/ticketpilot/05-approver-view.png" width="290"> | <img src="media/ticketpilot/08-cross-tenant-404.png" width="290"> |
 
-全部截图见 [`media/ticketpilot/`](media/ticketpilot/)，由 `scripts/ticketpilot_ui_e2e.py` 自动生成。
+全部截图见 [`media/ticketpilot/`](media/ticketpilot/)，由 `scripts/ticketpilot_ui_e2e.py` 自动生成；`llm-*` 前缀的来自真实模型后端，其余来自确定性演示后端。同一条黄金链路在两种后端上都通过（确定性 55 秒，真实模型 108 秒）。
 
 ## 测试与验证
 

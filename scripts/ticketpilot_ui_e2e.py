@@ -11,9 +11,11 @@ Usage:
 
 Defaults to http://localhost:8501 and ``media/ticketpilot``. ``--video`` records the whole
 run as a WebM (a backup demo when the live stack misbehaves) and ``--pace`` holds each
-finished step on screen for that many seconds so a viewer can read it. Expects the Docker demo
-stack (``docker/compose.ticketpilot-demo.yaml``: deterministic reasoner, demo-*-token
-identities), so no model call is made. Re-seed before a run if TP-0013 has been refunded
+finished step on screen for that many seconds so a viewer can read it. Written for the Docker
+demo stack (``docker/compose.ticketpilot-demo.yaml``: deterministic reasoner, demo-*-token
+identities, no model call); it also runs against a local real-model backend whose
+``TICKETPILOT_AUTH_TOKENS`` define the same customer/approver actor ids, in which case the
+cross-tenant step is skipped when no second tenant is configured. Re-seed before a run if TP-0013 has been refunded
 below 200 CNY: ``docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml
 run --rm ticketpilot_seed``.
 
@@ -118,11 +120,27 @@ def choose_identity(page: Page, label: str) -> None:
     expect(box).to_have_value(label, timeout=STEP_TIMEOUT_MS)
 
 
-def ensure_docker_tokens(page: Page) -> None:
-    source = page.locator(SIDEBAR).get_by_text("Docker 演示令牌")
-    if source.count():
-        source.first.click()
+def choose_token_source(page: Page, source: str) -> None:
+    if source == "auto":
+        return
+    label = "Docker 演示令牌" if source == "docker" else "本地 .env 令牌"
+    option = page.locator(SIDEBAR).get_by_text(label)
+    if option.count():
+        option.first.click()
         page.wait_for_timeout(500)
+
+
+def identity_available(page: Page, label: str) -> bool:
+    box = field(page, "演示身份", SIDEBAR)
+    box.click()
+    option = page.get_by_role("option", name=label)
+    try:
+        option.wait_for(state="visible", timeout=3_000)
+        available = True
+    except Exception:
+        available = False
+    box.press("Escape")
+    return available
 
 
 def action_id(page: Page) -> str:
@@ -199,8 +217,8 @@ def shoot(page: Page, out: Path, name: str, full_page: bool = False) -> None:
     page.wait_for_timeout(int(PACE_SECONDS * 1000))
 
 
-def run(page: Page, out: Path) -> None:
-    ensure_docker_tokens(page)
+def run(page: Page, out: Path, token_source: str) -> None:
+    choose_token_source(page, token_source)
     choose_identity(page, CUSTOMER)
 
     log("1/8 logistics query")
@@ -263,14 +281,17 @@ def run(page: Page, out: Path) -> None:
 
     log("7/8 cross-tenant lookup is hidden")
     current = ticket_id(page)
-    choose_identity(page, OTHER_TENANT)
-    page.locator(SIDEBAR).get_by_text("按 Ticket ID 打开").click()
-    ticket_field = field(page, "Ticket ID", SIDEBAR)
-    ticket_field.fill(current)
-    ticket_field.press("Enter")
-    click_button(page, "打开工单", SIDEBAR)
-    wait_for_text(page, "统一返回 404", SIDEBAR)
-    shoot(page, out, "08-cross-tenant-404")
+    if identity_available(page, OTHER_TENANT):
+        choose_identity(page, OTHER_TENANT)
+        page.locator(SIDEBAR).get_by_text("按 Ticket ID 打开").click()
+        ticket_field = field(page, "Ticket ID", SIDEBAR)
+        ticket_field.fill(current)
+        ticket_field.press("Enter")
+        click_button(page, "打开工单", SIDEBAR)
+        wait_for_text(page, "统一返回 404", SIDEBAR)
+        shoot(page, out, "08-cross-tenant-404")
+    else:
+        log("skipped: no other-tenant identity configured on this backend")
 
     log("8/8 summary")
     log(
@@ -286,6 +307,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--video", type=Path, default=None)
     parser.add_argument("--pace", type=float, default=0.0)
+    parser.add_argument(
+        "--token-source",
+        choices=["auto", "docker", "env"],
+        default="auto",
+        help="which token set to select when the page offers both; auto keeps the page's choice",
+    )
     return parser.parse_args()
 
 
@@ -299,7 +326,7 @@ def main() -> int:
         browser = launch_browser(p, args.headed)
         page = open_workbench(browser, args.url, args.video)
         try:
-            run(page, args.out)
+            run(page, args.out, args.token_source)
         except Exception as exc:  # noqa: BLE001 - report and save evidence
             page.screenshot(path="ticketpilot_ui_e2e_failure.png", full_page=True)
             log(f"FAIL after {time.monotonic() - started:.0f}s: {exc}")

@@ -93,6 +93,8 @@ uv run --with playwright python scripts/ticketpilot_ui_e2e.py
 
 脚本按第 4 节走完整条链路并断言业务结果：模糊退款不生成审批、同 key 重放复用 run、批准后可退余额变化、第二次同金额申请的 `action_id` 不同且再次扣减、跨租户 404。找不到 Playwright 自带 Chromium 时会使用本机 Chrome / Edge。
 
+可选参数：`--video 目录` 录制整段 WebM 作为备用演示（首次需要 `uv run --with playwright python -m playwright install ffmpeg`），`--pace 3` 让每一步在屏幕上停留 3 秒便于观看，`--token-source docker|env` 强制选择令牌来源。对本机真实模型后端运行时，若 `.env` 里没有第二个租户的身份，跨租户一步会自动跳过。
+
 每跑一次会从 `TP-0013` 扣掉 200 元。可退余额不足 200 时先重置合成数据：
 
 ```powershell
