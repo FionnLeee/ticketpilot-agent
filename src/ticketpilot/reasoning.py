@@ -167,7 +167,20 @@ class LangChainTicketReasoner:
                         "an amount from order numbers, dates or an account balance. Set "
                         "full_refund_requested only for an explicit request to refund the full balance. "
                         "Extract the order explicitly mentioned in this message even if it differs "
-                        "from known_order_reference. Do not infer a refund from a bare order number."
+                        "from known_order_reference. Do not infer a refund from a bare order number. "
+                        "Apply these output rules to every request: "
+                        "Always extract an explicitly present order reference, regardless of category. "
+                        "If none is present, copy known_order_reference (including for cancellation "
+                        "or OTHER); use null only when neither source supplies an order. "
+                        "A message consisting only of an order reference is ORDER_STATUS, with that "
+                        "reference extracted. Cancelled refunds without another question are OTHER. "
+                        "Set full_refund_requested=true when the user actively asks to return all "
+                        "paid money (全额退款, 全部退回); otherwise explicitly set it to false. "
+                        "A policy question mentioning full refunds or a negated full-refund request "
+                        "must not set this flag. For an explicit full refund without a numeric "
+                        "requested amount, output true for the flag and null for the amount. "
+                        "Return all classification fields explicitly; do not omit a field because "
+                        "its schema has a default."
                     )
                 ),
                 HumanMessage(

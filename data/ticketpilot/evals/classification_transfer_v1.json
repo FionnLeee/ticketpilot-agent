@@ -1,0 +1,80 @@
+{
+  "dataset_id": "ticketpilot-classification-transfer-v1",
+  "split": "development",
+  "provenance": "First-party synthetic transfer probes, fixed before the v2 prompt experiment. Authored with knowledge of baseline failures; not an independent holdout.",
+  "label_policy": "Same four-field contract as classification-dev-v1. Includes paraphrases and negative contrasts. Known order retained absent explicit replacement; bare order routes to ORDER_STATUS.",
+  "cases": [
+    {
+      "case_id": "N01",
+      "scenario_family": "full_paraphrase",
+      "message": "请把订单 TP-0081 支付的钱全部退给我。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0081",
+        "requested_refund_amount": null,
+        "full_refund_requested": true
+      }
+    },
+    {
+      "case_id": "N02",
+      "scenario_family": "partial_contrast",
+      "message": "订单 TP-0082 不用全退，只退30元就好。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "REFUND",
+        "order_reference": "TP-0082",
+        "requested_refund_amount": "30",
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "N03",
+      "scenario_family": "cancel_known",
+      "message": "算了，这笔退款撤销吧。",
+      "known_order_reference": "TP-0083",
+      "expected": {
+        "category": "OTHER",
+        "order_reference": "TP-0083",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "N04",
+      "scenario_family": "bare_new",
+      "message": "TP-0084",
+      "known_order_reference": null,
+      "expected": {
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-0084",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "N05",
+      "scenario_family": "override_new",
+      "message": "我说的是 TP-0086，查这个订单的配送。",
+      "known_order_reference": "TP-0085",
+      "expected": {
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-0086",
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    },
+    {
+      "case_id": "N06",
+      "scenario_family": "policy_full",
+      "message": "什么情况下可以全额退款？只是咨询政策。",
+      "known_order_reference": null,
+      "expected": {
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null,
+        "full_refund_requested": false
+      }
+    }
+  ]
+}
