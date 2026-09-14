@@ -163,7 +163,7 @@ uv run pytest tests/ticketpilot --run-docker   # needs the compose PostgreSQL
 uv run ruff check src tests scripts
 ```
 
-Results on 2026-09-14, Windows 11 / Python 3.12: default suite `287 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `104 passed` (35 of them run only with `--run-docker`); service isolation 8 passed; browser golden path 8/8 steps in about 55 s. The numbers come from different test selections and must not be summed.
+Results on 2026-09-15, Windows 11 / Python 3.12: default suite `288 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `105 passed` (35 of them run only with `--run-docker`); service isolation 8 passed; browser golden path 8/8 steps in about 55 s. The numbers come from different test selections and must not be summed.
 
 ## Layout
 

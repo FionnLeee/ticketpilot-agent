@@ -51,7 +51,7 @@ README、演示、简历和面试表述都应遵守这条边界，不能把上�
 | Streamlit | 通用聊天 UI、Agent/模型选择、历史会话和语音入口 | 已稳定 Windows UI 测试，并新增默认关闭的工单状态、审批和审计控制台 | 保持本地演示定位，不扩成生产客服门户 |
 | Observability | LangSmith/Langfuse 可选集成和 feedback 接口 | 已新增 tenant 范围 run event API、Tool 结果/近似耗时和审批重放事件 | 后续补模型耗时、成本、分页、聚合指标和告警 |
 | Docker | PostgreSQL、FastAPI、Streamlit 的 Compose 编排和健康检查 | 已完成 Docker 数据迁移与本地 baseline 验证 | 复用当前编排，只添加 TicketPilot 必需的初始化或迁移步骤 |
-| Tests | Agent、Schema、Service、Client、UI 和 Docker E2E 测试基础 | 修复 1 个 Windows 测试问题；baseline 为 `190 passed, 4 skipped`。现已新增 API 契约、隔离、仓储、并发归属、退款语义、graph、评测器和工作台测试；2026-09-14 默认全量 `287 passed, 39 skipped`，PostgreSQL 专项 `104 passed` | 独立封存评测集与端到端评测 |
+| Tests | Agent、Schema、Service、Client、UI 和 Docker E2E 测试基础 | 修复 1 个 Windows 测试问题；baseline 为 `190 passed, 4 skipped`。现已新增 API 契约、隔离、仓储、并发归属、退款语义、graph、评测器和工作台测试；2026-09-15 默认全量 `288 passed, 39 skipped`，PostgreSQL 专项 `105 passed` | 独立封存评测集与端到端评测 |
 
 ## 4. 上游代码证据
 

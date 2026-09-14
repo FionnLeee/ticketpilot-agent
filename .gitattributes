@@ -1,0 +1,3 @@
+# Data assets are hashed by their manifests; keep their bytes identical on every platform.
+data/ticketpilot/** text eol=lf
+migrations/** text eol=lf

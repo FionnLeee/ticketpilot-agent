@@ -163,7 +163,7 @@ uv run pytest tests/ticketpilot --run-docker   # 需要 compose 里的 PostgreSQ
 uv run ruff check src tests scripts
 ```
 
-2026-09-14 在 Windows 11 / Python 3.12 上的结果：默认全量 `287 passed, 39 skipped`；PostgreSQL 专项 `104 passed`（其中 35 个用例只在 `--run-docker` 下运行）；服务隔离专项 8 passed；浏览器黄金链路 8 步全部通过（约 55 秒）。数字来自不同测试集合，不能相加。
+2026-09-15 在 Windows 11 / Python 3.12 上的结果：默认全量 `288 passed, 39 skipped`；PostgreSQL 专项 `105 passed`（其中 35 个用例只在 `--run-docker` 下运行）；服务隔离专项 8 passed；浏览器黄金链路 8 步全部通过（约 55 秒）。数字来自不同测试集合，不能相加。
 
 ## 目录
 

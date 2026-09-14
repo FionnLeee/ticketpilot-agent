@@ -44,7 +44,7 @@ class EvaluationDataset(TicketPilotModel):
 
 
 def load_dataset(path: Path) -> tuple[EvaluationDataset, str]:
-    raw = path.read_bytes()
+    raw = path.read_bytes().replace(b"\r\n", b"\n")
     return EvaluationDataset.model_validate_json(raw), hashlib.sha256(raw).hexdigest()
 
 

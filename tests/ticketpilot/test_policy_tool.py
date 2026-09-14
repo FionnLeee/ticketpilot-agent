@@ -1,10 +1,16 @@
 import asyncio
+import json
 
 import pytest
 from langgraph.prebuilt import ToolRuntime
 
 from ticketpilot.domain import PrincipalRole
-from ticketpilot.policies import LocalPolicyRetriever, PolicyRetriever, load_policy_corpus
+from ticketpilot.policies import (
+    DEFAULT_POLICY_MANIFEST_PATH,
+    LocalPolicyRetriever,
+    PolicyRetriever,
+    load_policy_corpus,
+)
 from ticketpilot.schemas import Citation, RequestPrincipal
 from ticketpilot.tools import TicketPilotContext, search_policy, search_policy_func
 
@@ -57,6 +63,20 @@ def test_policy_corpus_manifest_and_hash_are_valid() -> None:
     assert corpus.dataset_id == "ticketpilot-demo-policy-v1"
     assert len(corpus.chunks) == 6
     assert len({chunk.chunk_id for chunk in corpus.chunks}) == 6
+
+
+def test_policy_corpus_hash_survives_crlf_checkout(tmp_path) -> None:
+    manifest_path = DEFAULT_POLICY_MANIFEST_PATH
+    corpus_relative = json.loads(manifest_path.read_text(encoding="utf-8"))["corpus_path"]
+    source = manifest_path.parent / corpus_relative
+    target = tmp_path / corpus_relative
+    target.parent.mkdir(parents=True)
+    target.write_bytes(source.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    (tmp_path / manifest_path.name).write_bytes(manifest_path.read_bytes())
+
+    corpus = load_policy_corpus(tmp_path / manifest_path.name)
+
+    assert len(corpus.chunks) == 6
 
 
 @pytest.mark.asyncio

@@ -40,7 +40,9 @@ def load_policy_corpus(
 ) -> PolicyCorpus:
     manifest: dict[str, Any] = json.loads(manifest_path.read_text(encoding="utf-8"))
     corpus_path = manifest_path.parent / manifest["corpus_path"]
-    corpus_bytes = corpus_path.read_bytes()
+    # The manifest hash is taken over LF content so a CRLF checkout (git autocrlf on
+    # Windows) still verifies.
+    corpus_bytes = corpus_path.read_bytes().replace(b"\r\n", b"\n")
     actual_hash = hashlib.sha256(corpus_bytes).hexdigest()
     if actual_hash != manifest["corpus_sha256"]:
         raise ValueError("Policy corpus hash does not match its manifest")
