@@ -152,12 +152,16 @@ router.include_router(agui_router)
 async def info(request: Request) -> ServiceMetadata:
     models = list(settings.AVAILABLE_MODELS)
     models.sort()
+    ticketpilot_enabled = request.app.state.ticketpilot_enabled
     return ServiceMetadata(
-        agents=[] if request.app.state.ticketpilot_enabled else get_all_agent_info(),
+        agents=[] if ticketpilot_enabled else get_all_agent_info(),
         models=models,
         default_agent=DEFAULT_AGENT,
         default_model=settings.DEFAULT_MODEL,
-        ticketpilot_enabled=request.app.state.ticketpilot_enabled,
+        ticketpilot_enabled=ticketpilot_enabled,
+        ticketpilot_reasoner_mode=(
+            settings.TICKETPILOT_REASONER_MODE.value if ticketpilot_enabled else None
+        ),
     )
 
 

@@ -88,3 +88,54 @@ def test_ticketpilot_client_surfaces_structured_api_error() -> None:
     assert raised.value.code == "RESOURCE_NOT_FOUND"
     assert raised.value.status_code == 404
     assert str(raised.value) == "Run was not found"
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected"),
+    [(404, "ok"), (401, "unauthorized"), (403, "forbidden"), (500, "error")],
+)
+def test_ticketpilot_client_probe_identity_maps_status(status_code: int, expected: str) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            status_code,
+            request=request,
+            json={"error": {"code": "X", "message": "probe", "details": {}}},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+        client = TicketPilotClient("http://ticketpilot.test", client=http_client)
+        assert client.probe_identity("opaque-token") == expected
+
+    assert seen[0].url.path == "/v1/tickets/00000000-0000-0000-0000-000000000000"
+    assert seen[0].headers["Authorization"] == "Bearer opaque-token"
+
+
+def test_ticketpilot_client_probe_identity_reports_unreachable_backend() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+        client = TicketPilotClient("http://ticketpilot.test", client=http_client)
+        assert client.probe_identity("opaque-token") == "unreachable"
+
+
+def test_ticketpilot_client_get_info_is_unauthenticated() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={"ticketpilot_enabled": True, "ticketpilot_reasoner_mode": "deterministic_demo"},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+        client = TicketPilotClient("http://ticketpilot.test", client=http_client)
+        info = client.get_info()
+
+    assert info["ticketpilot_reasoner_mode"] == "deterministic_demo"
+    assert seen[0].url == "http://ticketpilot.test/info"
+    assert "Authorization" not in seen[0].headers

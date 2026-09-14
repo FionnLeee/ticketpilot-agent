@@ -26,6 +26,10 @@ class ServiceMetadata(BaseModel):
     ticketpilot_enabled: bool = Field(
         default=False, description="Whether the service exposes only TicketPilot business routes."
     )
+    ticketpilot_reasoner_mode: str | None = Field(
+        default=None,
+        description="Active TicketPilot reasoner: 'llm' or 'deterministic_demo'. Null when disabled.",
+    )
 
     agents: list[AgentInfo] = Field(
         description="List of available agents.",

@@ -1,6 +1,10 @@
-from typing import Any
+from typing import Any, Literal
 
 import httpx
+
+NIL_UUID = "00000000-0000-0000-0000-000000000000"
+
+IdentityProbe = Literal["ok", "unauthorized", "forbidden", "unreachable", "error"]
 
 
 class TicketPilotClientError(Exception):
@@ -84,6 +88,35 @@ class TicketPilotClient:
             token,
             json={"decision": decision, "reason": reason},
         )
+
+    def get_info(self) -> dict[str, Any]:
+        request = self.client.request if self.client is not None else httpx.request
+        try:
+            response = request("GET", f"{self.base_url}/info", timeout=self.timeout)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise TicketPilotClientError(f"TicketPilot service request failed: {exc}") from exc
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise TicketPilotClientError("TicketPilot returned an invalid response")
+        return payload
+
+    def probe_identity(self, token: str) -> IdentityProbe:
+        # A nil ticket id can never exist, so 404 proves the token was accepted
+        # without touching real data.
+        try:
+            self._request("GET", f"/v1/tickets/{NIL_UUID}", token)
+        except TicketPilotClientError as exc:
+            if exc.status_code == 404:
+                return "ok"
+            if exc.status_code == 401:
+                return "unauthorized"
+            if exc.status_code == 403:
+                return "forbidden"
+            if exc.status_code is None:
+                return "unreachable"
+            return "error"
+        return "ok"
 
     def _request(
         self,

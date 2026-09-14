@@ -66,6 +66,7 @@ def test_ticketpilot_has_no_generic_entry_points(monkeypatch, bearer):
     assert info.status_code == 200
     assert info.json()["ticketpilot_enabled"] is True
     assert info.json()["agents"] == []
+    assert info.json()["ticketpilot_reasoner_mode"] in {"llm", "deterministic_demo"}
 
 
 @pytest.mark.asyncio
@@ -118,3 +119,4 @@ def test_generic_mode_keeps_existing_routes(monkeypatch):
     info = TestClient(app).get("/info")
     assert info.status_code == 200
     assert info.json()["ticketpilot_enabled"] is False
+    assert info.json()["ticketpilot_reasoner_mode"] is None
