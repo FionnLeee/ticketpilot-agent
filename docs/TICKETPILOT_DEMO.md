@@ -8,6 +8,7 @@
 
 ```powershell
 cd ticketpilot
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }   # 全容器演示不需要填任何 Key
 docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml up -d --build
 docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml ps
 ```
