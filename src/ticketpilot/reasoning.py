@@ -145,11 +145,17 @@ class LangChainTicketReasoner:
         if model_name == OpenAICompatibleName.OPENAI_COMPATIBLE:
             # Decimal's generated regex is unsupported by some compatible schema decoders.
             wire_schema = TicketClassification.model_json_schema()
+            wire_schema["required"] = list(wire_schema["properties"])
+            for field_schema in wire_schema["properties"].values():
+                field_schema.pop("default", None)
             wire_schema["properties"]["requested_refund_amount"] = {
                 "anyOf": [{"type": "number"}, {"type": "null"}],
-                "default": None,
                 "description": "Explicit refund amount, positive with at most two decimal places.",
             }
+            wire_schema["properties"]["full_refund_requested"]["description"] = (
+                "True only when the user actively asks to refund the entire payment or all "
+                "remaining refundable money; false for partial, policy-only, negated or cancelled."
+            )
             runnable = cast(ChatOpenAI, model).with_structured_output(
                 wire_schema, method="json_schema"
             )

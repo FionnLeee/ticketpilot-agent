@@ -1,0 +1,35 @@
+{
+  "dataset_id": "ticketpilot-classification-eval-v2",
+  "dataset_sha256": "965070f72e1d2cec37a6987a349ba6123365f34bc2e3d62678d4e5911f849d61",
+  "model": "qwen3.7-flash",
+  "temperature": 0.5,
+  "request_concurrency": 4,
+  "baseline_full_run": {
+    "cases": 120,
+    "strict_exact_matches": 101,
+    "strict_exact_accuracy": 0.8416666667,
+    "wilson_95": [0.7659051082, 0.8962310399],
+    "error_count": 3,
+    "field_accuracy": {
+      "category": 0.9583333333,
+      "order_reference": 0.95,
+      "requested_refund_amount": 0.975,
+      "full_refund_requested": 0.8666666667
+    },
+    "full_refund_scenario": {"correct": 2, "total": 15},
+    "latency_ms": {"p50": 16114.93, "p95": 24325.58, "p99": 28940.39}
+  },
+  "targeted_regression_after_required_schema_fix": {
+    "scope": ["full_refund", "policy_only", "negation_cancel"],
+    "cases": 45,
+    "strict_exact_matches": 44,
+    "strict_exact_accuracy": 0.9777777778,
+    "wilson_95": [0.8843305361, 0.9960665025],
+    "error_count": 0,
+    "full_refund_scenario": {"correct": 15, "total": 15},
+    "negation_cancel_scenario": {"correct": 15, "total": 15},
+    "policy_only_scenario": {"correct": 14, "total": 15},
+    "latency_ms": {"p50": 18792.97, "p95": 22711.0, "p99": 28847.1}
+  },
+  "claim_boundary": "The 45-case targeted regression is not a post-fix score for the full 120-case dataset; labels are first-party synthetic diagnostics, not production traffic"
+}

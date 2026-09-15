@@ -475,6 +475,106 @@ class TicketRepository:
             )
             return list(await cursor.fetchall())
 
+    async def list_tickets(
+        self, principal: RequestPrincipal, limit: int
+    ) -> list[dict[str, Any]]:
+        async with self.pool.connection() as connection:
+            customer_filter = "AND t.customer_id = %s" if principal.role is PrincipalRole.CUSTOMER else ""
+            params: tuple[Any, ...] = (
+                (principal.tenant_id, principal.actor_id, limit)
+                if principal.role is PrincipalRole.CUSTOMER
+                else (principal.tenant_id, limit)
+            )
+            cursor = await connection.execute(
+                f"""
+                SELECT
+                    t.id, t.thread_id, t.status, t.processing_result, t.subject,
+                    t.category, t.priority, t.risk_level, o.order_reference,
+                    t.created_at, t.updated_at
+                FROM ticketpilot.tickets AS t
+                LEFT JOIN ticketpilot.orders AS o
+                    ON o.tenant_id = t.tenant_id AND o.id = t.order_pk
+                WHERE t.tenant_id = %s {customer_filter}
+                ORDER BY t.updated_at DESC, t.id
+                LIMIT %s
+                """,
+                params,
+            )
+            return list(await cursor.fetchall())
+
+    async def list_approvals(self, tenant_id: str, limit: int) -> list[dict[str, Any]]:
+        async with self.pool.connection() as connection:
+            cursor = await connection.execute(
+                """
+                SELECT
+                    a.id, a.ticket_id, a.run_id, t.subject, o.order_reference,
+                    a.action_type, a.action_payload, a.status, a.requested_at
+                FROM ticketpilot.approvals AS a
+                JOIN ticketpilot.tickets AS t
+                    ON t.tenant_id = a.tenant_id AND t.id = a.ticket_id
+                LEFT JOIN ticketpilot.orders AS o
+                    ON o.tenant_id = t.tenant_id AND o.id = t.order_pk
+                WHERE a.tenant_id = %s
+                ORDER BY (a.status = 'PENDING') DESC, a.requested_at DESC, a.id
+                LIMIT %s
+                """,
+                (tenant_id, limit),
+            )
+            return list(await cursor.fetchall())
+
+    async def dashboard_summary(self, tenant_id: str) -> dict[str, Any]:
+        async with self.pool.connection() as connection:
+            cursor = await connection.execute(
+                """
+                SELECT order_count, customer_count, ticket_count, contact_rate,
+                       refund_ticket_count, open_ticket_count, avg_resolution_minutes
+                FROM ticketpilot.tenant_overview
+                WHERE tenant_id = %s
+                """,
+                (tenant_id,),
+            )
+            tenant = await cursor.fetchone()
+            cursor = await connection.execute(
+                """
+                SELECT dataset_id, loaded_at, row_counts
+                FROM ticketpilot.synthetic_datasets
+                ORDER BY loaded_at DESC
+                """
+            )
+            datasets = list(await cursor.fetchall())
+            cursor = await connection.execute(
+                """
+                SELECT day::text AS day,
+                       sum(created_count)::bigint AS created_count,
+                       sum(refund_count)::bigint AS refund_count,
+                       sum(resolved_count)::bigint AS resolved_count,
+                       sum(failed_count)::bigint AS failed_count
+                FROM ticketpilot.daily_ticket_volume
+                WHERE data_origin = 'SYNTHETIC_HISTORY'
+                GROUP BY day
+                ORDER BY day DESC
+                LIMIT 30
+                """
+            )
+            daily_volume = list(reversed(await cursor.fetchall()))
+            cursor = await connection.execute(
+                """
+                SELECT status, sum(approval_count)::bigint AS approval_count,
+                       coalesce(sum(requested_amount), 0) AS requested_amount
+                FROM ticketpilot.refund_approval_funnel
+                WHERE data_origin = 'SYNTHETIC_HISTORY'
+                GROUP BY status
+                ORDER BY status
+                """
+            )
+            refund_funnel = list(await cursor.fetchall())
+        return {
+            "tenant": tenant,
+            "datasets": datasets,
+            "daily_volume": daily_volume,
+            "refund_funnel": refund_funnel,
+        }
+
     async def get_pending_approval(self, tenant_id: str, ticket_id: UUID) -> dict[str, Any] | None:
         async with self.pool.connection() as connection:
             cursor = await connection.execute(

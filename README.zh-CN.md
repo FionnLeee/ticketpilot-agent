@@ -5,9 +5,9 @@
 > 基于开源 [`agent-service-toolkit`](https://github.com/JoshuaC215/agent-service-toolkit)（MIT）二次开发。
 > **模型负责理解语言；确定性代码、PostgreSQL 和人工审批控制权限、状态与副作用。**
 
-`Python 3.12 · FastAPI · LangGraph · PostgreSQL · Streamlit · Docker Compose · Playwright`
+`React 19 · TypeScript · React Router 7 · FastAPI · LangGraph · PostgreSQL · Docker Compose · Playwright`
 
-<img src="media/ticketpilot/07-second-refund-overview.png" width="900" alt="TicketPilot 工作台：同金额第二次退款申请形成新动作并执行后">
+<img src="media/ticketpilot/web-overview.png" width="1100" alt="TicketPilot AI 售后运营控制台">
 
 ## 它解决什么问题
 
@@ -42,8 +42,9 @@
 
 ```mermaid
 flowchart TB
-    W["Streamlit 工作台（演示）<br/>身份切换 · 场景 · 对话 · 审批卡 · 审计时间线"]
-    API["FastAPI · TicketPilot 专用模式<br/>只挂载 /v1/tickets · /v1/tickets/{id}/messages · /v1/approvals/{id}:decide · /v1/runs/{id}/events"]
+    W["React 运营控制台<br/>总览 · 工单 · 审批 · Execution Runway · 面试演示"]
+    SW["Streamlit 内部调试台"]
+    API["FastAPI · TicketPilot 专用模式<br/>业务动作 API + tenant-scoped 列表/看板读模型"]
     P["Bearer Token → 可信 tenant / actor / role"]
     S["TicketService + Repository<br/>事务 · 行锁 · 两层幂等 · active run 归属 · 执行前复验"]
     DB[("PostgreSQL 业务表<br/>tickets · messages · orders · approvals · audit_events")]
@@ -51,6 +52,7 @@ flowchart TB
     CK[("LangGraph checkpoint")]
     M["Reasoner：真实模型 或 确定性演示"]
     W --> API --> P --> S
+    SW --> API
     S <--> DB
     S --> LG
     LG <--> DB
@@ -94,8 +96,8 @@ sequenceDiagram
 | 持久化 | checkpoint 与 store 接入 | 独立业务连接池、8 个版本化迁移、五张业务表、约束/唯一索引，以及百万级历史的流式 `COPY` 与质量校验 |
 | 身份 | 可选 Bearer 校验 | `TICKETPILOT_AUTH_TOKENS` → `RequestPrincipal`；资源归属下推到 SQL；角色权限 |
 | 可靠性 | — | 创建/消息请求幂等、退款动作幂等、active run 归属、审批重放、执行前复验 |
-| 评测 | — | 18 + 6 条合成中文分类样本、确定性评分器、可复现的真实模型评测脚本 |
-| 演示 | 通用聊天页 | 角色化工作台（身份切换、场景按钮、审批卡、中文审计时间线）、API 与浏览器两条黄金链路脚本 |
+| 评测 | — | 18 + 6 条开发/迁移样本，以及 120 条困难中文评测集；精确匹配、分类别 F1、混淆矩阵、Wilson 区间和延迟分位数 |
+| 演示 | 通用聊天页 | React/TypeScript 运营控制台与 Execution Runway；Streamlit 保留为内部调试台；API 与浏览器黄金链路脚本 |
 
 完整归属见 [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md)，来源与许可见 [`UPSTREAM.md`](UPSTREAM.md)。上游能力不是本人从零实现。
 
@@ -111,17 +113,19 @@ sequenceDiagram
 
 明确不宣称：跨真实支付系统的 exactly-once（当前退款是 Mock，真实支付需要支付方幂等键、Outbox 与对账）；进程被强杀后的自动接管（已认领的 run 需要后续恢复机制）。
 
-## 百万级合成历史与小并发验证
+## 百万级合成历史与并发验证
 
 默认历史 manifest 已在 PostgreSQL 16 实际落库：**1,000,000 订单、235,924 工单、478,813 消息、56,127 审批、1,475,896 审计事件，共 3,246,760 行**，覆盖 12 租户与 730 天。生成器按 20,000 订单流式分批、按外键顺序 `COPY`，196.360 秒完成装载；21 条跨表质量规则全部通过。数据集指纹支持幂等重跑，第二次装载阶段 0.560 秒识别并跳过，行数不增加；一组真实索引查询实际走 `Index Scan`。
 
 另有可执行规模演示：10,000 笔合成订单、10 租户、1,000 个客户、24 个政策片段；12 类业务场景在 10 租户下共 120 次工作流验证。预生成历史以 `SYNTHETIC_HISTORY` 标识，与真实 Service/LangGraph 运行产生的 `LIVE_RUN` 分开统计。详细数据契约、复跑命令、分析视图、耗时与限制见[百万级历史说明](docs/HISTORY_DATASET.md)。
 
-本机进程内 Service + LangGraph + PostgreSQL 测试，1/10/30 并发各 100 次查询均通过；30 次同请求只有一个 ticket/run，30 次同审批仅扣减一次 Mock 金额。**不含 HTTP 或真实模型，不代表生产 QPS。** 数据覆盖、P95、复跑命令与扩展取舍见 [规模演示说明](docs/SCALE_DEMO.md)。
+本机做了两种明确分口径的负载实验。完整业务工作流 `TicketService → LangGraph → PostgreSQL` 在 1/10/30/100 并发下各运行 200 次，全部成功；100 次相同请求最终只有一个 ticket/run，100 次相同审批只扣减一次 Mock 金额、只产生一条 `REFUND_EXECUTED`。并发 10 后吞吐不再上升，并发 100 的 P95 达到 9.515 秒，暴露出连接池/checkpoint 写入的容量边界。
+
+另一次 HTTP 只读实验经 `Nginx → Uvicorn/FastAPI → Bearer → PostgreSQL`，在 1/20/50/100/200 并发下各发出 1,000 次请求，5,000/5,000 返回 200；本机峰值约 199 req/s（并发 20），并发 200 时约 172 req/s、P95 1.524 秒。它不包含 LLM 和写动作，不能冒充 Agent 端到端 QPS 或生产 SLA。测量口径和复跑命令见 [规模演示说明](docs/SCALE_DEMO.md)。
 
 ## 真实模型评测（M2）
 
-`scripts/evaluate_ticketpilot_classification.py` 对真实 `LangChainTicketReasoner` 的意图分类与字段抽取做可复现评测：四个字段（意图、订单号、明确金额、全额标志）全对才算整条正确，记录模型、temperature、数据与代码哈希、逐条输出与耗时。
+`scripts/evaluate_ticketpilot_classification.py` 对真实 `LangChainTicketReasoner` 的意图分类与字段抽取做可复现评测：四个字段（意图、订单号、明确金额、全额标志）全对才算整条正确，记录模型、temperature、数据与代码哈希、逐条输出与耗时。评测器现支持受控并发，并输出 Wilson 95% 区间、按场景/难度准确率、分类别 precision/recall/F1、混淆矩阵与 P50/P95/P99。
 
 | 样本 | 提示词 v1 | 提示词 v2 |
 | --- | ---: | ---: |
@@ -129,6 +133,10 @@ sequenceDiagram
 | 6 条针对性迁移样本 | 4/6 | 5/6 |
 
 2026-09-14 单次实验，`qwen3.7-flash`，temperature 0.5，平均每条约 13–15 秒。v2 只改系统提示词（明确全额标志、已知订单继承、纯订单号路由），三处原始错误修复且无退步；「支付的钱全部退给我」仍漏全额标志，保留为已知限制。这是开发集成绩，不是线上准确率。细节见 [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md)。
+
+2026-09-15 在新建的 120 条困难中文评测集上，`qwen3.7-flash` 四字段严格精确匹配为 **101/120（84.17%，Wilson 95% CI 76.59%–89.62%）**，类别字段 95.83%，订单号 95.00%，金额 97.50%，全额标志 86.67%；3 条调用/结构校验错误保留在分母内。最大弱项集中在全额退款口语化表达（2/15），属于保守漏识别而非越权执行。
+
+排查发现，OpenAI-compatible wire schema 没把所有字段列为必填，provider 会省略 `full_refund_requested`，本地默认值又把缺失掩盖成 `false`。改成所有字段必填并移除默认值后，对受影响与相邻回归族做 45 条定向复测：**44/45（97.78%，Wilson 95% CI 88.43%–99.61%）**、0 调用错误；全额退款从 **2/15 提升到 15/15**，否定/取消仍为 15/15。这里明确不把 45 条定向成绩说成修复后 120 条总分，完整口径见评测文档。
 
 集成时发现的一个真实问题：兼容服务不支持 `Decimal` 生成的 JSON Schema 正则，请求在模型回答前就被 400 拒绝；解决方式是 wire schema 用 `number | null`，返回后仍由 Pydantic 做正数、两位小数和上限校验。
 
@@ -141,7 +149,7 @@ cp .env.example .env            # 至少保留 POSTGRES_* 默认值
 docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml up -d --build
 ```
 
-打开 `http://localhost:8501`，按 [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md) 的五分钟脚本操作。真实模型模式（`TICKETPILOT_REASONER_MODE=llm`，`DEFAULT_MODEL` 指向你的供应商）见同一文档第 2 节。
+打开 `http://localhost:3000` 使用正式 React 运营控制台；`http://localhost:8501` 保留为内部 Streamlit 调试台。启动、身份和页面说明见 [`docs/WEB_CONSOLE.md`](docs/WEB_CONSOLE.md)，五分钟业务脚本见 [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md)。
 
 自动化验收：
 
@@ -151,6 +159,10 @@ uv run --with playwright python scripts/ticketpilot_ui_e2e.py      # 浏览器�
 ```
 
 ## 演示截图
+
+| 工单工作台 | 面试演示航线 |
+| --- | --- |
+| <img src="media/ticketpilot/web-tickets.png" width="440"> | <img src="media/ticketpilot/web-demo.png" width="440"> |
 
 真实模型模式（`qwen3.7-flash`，本机后端）下的物流查询：模型只用订单 Tool 返回的事实和检索到的政策片段作答，运单号已脱敏，回答旁可展开引用。
 
@@ -171,13 +183,14 @@ uv run pytest tests/ticketpilot --run-docker   # 需要 compose 里的 PostgreSQ
 uv run ruff check src tests scripts
 ```
 
-2026-09-15 在 Windows 11 / Python 3.12 上的结果：默认全量 `295 passed, 39 skipped`；PostgreSQL 专项 `112 passed`；服务隔离专项 8 passed；浏览器黄金链路 8 步全部通过（约 55 秒）。数字来自有重叠的不同测试集合，不能相加。
+2026-09-15 在 Windows 11 / Python 3.12 上的结果：默认全量 `297 passed, 39 skipped`；PostgreSQL 专项 `114 passed`；服务隔离专项 6 passed；React 浏览器验收控制台 0 错误、390px 无横向溢出，同 key 重试返回相同 ticket/run。数字来自有重叠的不同测试集合，不能相加。
 
 ## 目录
 
 ```text
 src/ticketpilot/            业务代码：api / services / repositories / workflow_repository / graph / tools / reasoning / schemas / domain
-src/ticketpilot_streamlit.py 演示工作台
+frontend/                   React Router 运营控制台：总览 / 工单 / 审批 / 面试演示
+src/ticketpilot_streamlit.py 内部调试工作台
 src/client/ticketpilot.py   业务 API 客户端
 migrations/ticketpilot/     0001–0008 版本化 SQL 迁移
 data/ticketpilot/           合成订单/历史 manifest、政策语料、分类评测集
@@ -189,6 +202,7 @@ docs/                       ARCHITECTURE、CONTRIBUTION_MAP、DATASET_STRATEGY�
 ## 文档
 
 - [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md)：启动、身份、五分钟演示脚本、自动化验收
+- [`docs/WEB_CONSOLE.md`](docs/WEB_CONSOLE.md)：React 运营控制台架构、启动与页面说明
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：架构原则、状态机、数据模型、审批与恢复设计
 - [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md)：上游能力 / 个人贡献 / 明确不做
 - [`docs/DATASET_STRATEGY.md`](docs/DATASET_STRATEGY.md)：合成数据来源与许可

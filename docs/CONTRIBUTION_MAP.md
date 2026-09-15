@@ -51,7 +51,7 @@ README、演示、简历和面试表述都应遵守这条边界，不能把上�
 | Streamlit | 通用聊天 UI、Agent/模型选择、历史会话和语音入口 | 已稳定 Windows UI 测试，并新增默认关闭的工单状态、审批和审计控制台 | 保持本地演示定位，不扩成生产客服门户 |
 | Observability | LangSmith/Langfuse 可选集成和 feedback 接口 | 已新增 tenant 范围 run event API、Tool 结果/近似耗时和审批重放事件 | 后续补模型耗时、成本、分页、聚合指标和告警 |
 | Docker | PostgreSQL、FastAPI、Streamlit 的 Compose 编排和健康检查 | 已完成 Docker 数据迁移与本地 baseline 验证 | 复用当前编排，只添加 TicketPilot 必需的初始化或迁移步骤 |
-| Tests | Agent、Schema、Service、Client、UI 和 Docker E2E 测试基础 | 修复 1 个 Windows 测试问题；baseline 为 `190 passed, 4 skipped`。现已新增 API 契约、隔离、仓储、并发归属、退款语义、graph、评测器、工作台与历史数据测试；2026-09-15 默认全量 `295 passed, 39 skipped`，PostgreSQL 专项 `112 passed` | 独立封存评测集与端到端评测 |
+| Tests | Agent、Schema、Service、Client、UI 和 Docker E2E 测试基础 | 修复 1 个 Windows 测试问题；baseline 为 `190 passed, 4 skipped`。现已新增 API 契约、隔离、仓储、并发归属、退款语义、graph、评测器、工作台与历史数据测试；2026-09-15 默认全量 `297 passed, 39 skipped`，PostgreSQL 专项 `114 passed` | 独立封存评测集与端到端评测 |
 
 ## 4. 上游代码证据
 
@@ -219,7 +219,8 @@ MVP 需要新增：
 ## 14. M2 真实模型评测与演示收口
 
 - `scripts/evaluate_ticketpilot_classification.py`：对真实 `LangChainTicketReasoner` 的意图、订单号、明确金额和全额标志做确定性评分，记录模型、temperature、数据与代码哈希、逐条输出与耗时；
-- 18 条合成中文开发集与 6 条针对性迁移样本；提示词 v1→v2 对照：15/18→18/18、4/6→5/6，单次实验，不宣称线上准确率；
+- 从 18+6 条开发样本扩展到 120 条、8 类场景的中文诊断集；评测器增加受控并发、Wilson 95% 区间、按场景/难度统计、precision/recall/F1、混淆矩阵和尾延迟；
+- 完整 120 条首次实测为 101/120；据集中失败定位 OpenAI-compatible required/default schema 问题，45 条定向回归为 44/45、全额退款 2/15→15/15；两种样本口径分开披露，不宣称线上准确率；
 - 修复兼容服务拒绝 `Decimal` 正则 JSON Schema 的集成问题（wire schema 用 `number | null`，返回后仍由 Pydantic 校验）；
 - `/info` 暴露 `ticketpilot_reasoner_mode`，界面据此说明当前是真实模型还是确定性演示；
 - Streamlit 工作台：身份切换与后端令牌校验、演示场景按钮、聊天视图与政策引用、自动生成的 `Idempotency-Key` 与同 key 重试对照、按角色门控的审批卡、中文审计时间线、开发者详情；
@@ -236,4 +237,13 @@ MVP 需要新增：
 
 实测为 1,000,000 订单、3,246,760 关联行，装载 196.360 秒，21/21 质量检查通过。以上是第一方合成历史与本地 PostgreSQL 证据，不代表真实用户、百万次 LLM 推理或生产吞吐。详见 [`HISTORY_DATASET.md`](HISTORY_DATASET.md)。
 
-截至 2026-09-15，仍未完成且对外必须保留的边界：真实支付与跨系统 exactly-once、进程强杀后的自动接管、TicketPilot 专用 SSE、独立封存评测集与端到端评测、生产级身份系统。
+## 16. 正式运营控制台与并发证据
+
+- `frontend/`：React 19、TypeScript、Vite、React Router SPA、TanStack Query 与 Recharts，实现总览、工单队列/详情、审批队列和幂等面试演示；
+- 将审计事件映射为 `Request → Reason → Tool → Action → Approval → Effect` 的 Execution Runway，展示 Agent 决策链和副作用边界；
+- FastAPI 增加 tenant/customer 过滤的身份、工单列表、审批列表和 dashboard read model；前端不读取 LangGraph checkpoint，也不直连数据库；
+- Nginx 静态托管并反向代理 `/api`，正式 React 控制台与原 Streamlit 内部调试台在同一 Compose overlay 中分工共存；
+- 完整工作流实测扩展到 100 并发、每档 200 次，100 次相同创建和审批验证幂等不变量；另做最高 200 并发、共 5,000 请求的真实 HTTP 只读短测，并明确排除 LLM/写动作与生产 SLA；
+- 桌面与 390px 移动视口做 Playwright 视觉/交互验收，版本化保存正式控制台截图。
+
+截至 2026-09-15，仍未完成且对外必须保留的边界：真实支付与跨系统 exactly-once、进程强杀后的自动接管、TicketPilot 专用 SSE、独立人工复核封存集与端到端回答评测、生产级身份系统、持续混合负载与服务端背压。

@@ -21,11 +21,20 @@ def main() -> None:
     )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--scenario", action="append")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
+    if not 1 <= args.concurrency <= 10:
+        parser.error("--concurrency must be between 1 and 10")
     dataset, digest = load_dataset(args.dataset)
+    if args.scenario:
+        selected = [case for case in dataset.cases if case.scenario_family in args.scenario]
+        if not selected:
+            parser.error("--scenario did not match any cases")
+        dataset = dataset.model_copy(update={"cases": selected})
     if args.dry_run:
         print(
             json.dumps(
@@ -60,6 +69,7 @@ def main() -> None:
             LangChainTicketReasoner(),
             {"configurable": {"model": settings.DEFAULT_MODEL}},
             limit=args.limit,
+            concurrency=args.concurrency,
             metadata={
                 "dataset_sha256": digest,
                 "code_revision": revision,
@@ -71,7 +81,9 @@ def main() -> None:
                 "model_name": getattr(model, "model_name", None) or getattr(model, "model", None),
                 "temperature": getattr(model, "temperature", None),
                 "timeout_seconds": 60,
-                "note": "Sequential development evaluation; SDK retries may occur. No cost estimate.",
+                "request_concurrency": args.concurrency,
+                "selected_scenarios": args.scenario,
+                "note": "Bounded-concurrency evaluation; SDK retries may occur. No cost estimate.",
             },
         )
     )

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Request, status
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from core.settings import TicketPilotReasonerMode, settings
@@ -15,11 +15,15 @@ from ticketpilot.repositories import TicketRepository
 from ticketpilot.schemas import (
     AddTicketMessageRequest,
     ApprovalDecisionRequest,
+    ApprovalListResponse,
     CreateTicketRequest,
+    DashboardSummary,
     ErrorResponse,
+    IdentityResponse,
     RequestPrincipal,
     RunEventsResponse,
     TicketDetail,
+    TicketListResponse,
     TicketRunResult,
 )
 from ticketpilot.services import TicketService
@@ -55,6 +59,51 @@ def get_ticket_service(
         policy_retriever=LocalPolicyRetriever(),
         reasoner=reasoner,
     )
+
+
+@router.get("/me", response_model=IdentityResponse, responses={401: {"model": ErrorResponse}})
+async def get_identity(
+    principal: Annotated[RequestPrincipal, Depends(get_request_principal)],
+) -> IdentityResponse:
+    return IdentityResponse(**principal.model_dump())
+
+
+@router.get(
+    "/dashboard/summary",
+    response_model=DashboardSummary,
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
+)
+async def get_dashboard_summary(
+    principal: Annotated[RequestPrincipal, Depends(get_request_principal)],
+    service: Annotated[TicketService, Depends(get_ticket_service)],
+) -> DashboardSummary:
+    return await service.get_dashboard(principal)
+
+
+@router.get(
+    "/tickets",
+    response_model=TicketListResponse,
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
+)
+async def list_tickets(
+    principal: Annotated[RequestPrincipal, Depends(get_request_principal)],
+    service: Annotated[TicketService, Depends(get_ticket_service)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 40,
+) -> TicketListResponse:
+    return await service.list_tickets(principal, limit)
+
+
+@router.get(
+    "/approvals",
+    response_model=ApprovalListResponse,
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
+)
+async def list_approvals(
+    principal: Annotated[RequestPrincipal, Depends(get_request_principal)],
+    service: Annotated[TicketService, Depends(get_ticket_service)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 40,
+) -> ApprovalListResponse:
+    return await service.list_approvals(principal, limit)
 
 
 @router.post(

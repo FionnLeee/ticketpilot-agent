@@ -5,9 +5,9 @@ English | [简体中文](README.zh-CN.md)
 > Built on the MIT-licensed [`agent-service-toolkit`](https://github.com/JoshuaC215/agent-service-toolkit).
 > **The model understands language; deterministic code, PostgreSQL and a human approver own permissions, state and side effects.**
 
-`Python 3.12 · FastAPI · LangGraph · PostgreSQL · Streamlit · Docker Compose · Playwright`
+`React 19 · TypeScript · React Router 7 · FastAPI · LangGraph · PostgreSQL · Docker Compose · Playwright`
 
-<img src="media/ticketpilot/07-second-refund-overview.png" width="900" alt="TicketPilot workbench after a second same-amount refund was executed as a new action">
+<img src="media/ticketpilot/web-overview.png" width="1100" alt="TicketPilot AI after-sales operations console">
 
 ## The problem
 
@@ -42,15 +42,18 @@ Ticket status (`NEW / PROCESSING / WAITING_INFORMATION / WAITING_APPROVAL / RESO
 
 ```mermaid
 flowchart TB
-    W["Streamlit workbench (demo)<br/>identity switch · scenarios · chat · approval card · audit timeline"]
-    API["FastAPI · TicketPilot dedicated mode<br/>only /v1/tickets · /v1/tickets/{id}/messages · /v1/approvals/{id}:decide · /v1/runs/{id}/events"]
+    W["React operations console<br/>overview · tickets · approvals · Execution Runway · interview demo"]
+    SW["Streamlit internal workbench"]
+    API["FastAPI · TicketPilot dedicated mode<br/>business commands + tenant-scoped read models"]
     P["bearer token → trusted tenant / actor / role"]
     S["TicketService + repositories<br/>transactions · row locks · two idempotency layers · active-run ownership · pre-execution re-verification"]
     DB[("PostgreSQL business tables<br/>tickets · messages · orders · approvals · audit_events")]
     LG["LangGraph ticket graph<br/>classify → query_order → search_policy → plan_work<br/>→ read-only: grounded answer → finalize<br/>→ refund: create_pending_approval → interrupt() ⏸ → after decision Command(resume) → verify → execute_refund_mock"]
     CK[("LangGraph checkpoint")]
     M["reasoner: real model or deterministic demo"]
-    W --> API --> P --> S
+    W --> API
+    SW --> API
+    API --> P --> S
     S <--> DB
     S --> LG
     LG <--> DB
@@ -94,8 +97,8 @@ sequenceDiagram
 | Persistence | checkpoint and store wiring | Separate business pool, 8 versioned migrations, five constrained business tables, plus streaming `COPY` and quality checks for million-order history |
 | Identity | optional bearer check | `TICKETPILOT_AUTH_TOKENS` → `RequestPrincipal`; ownership pushed into SQL; role checks |
 | Reliability | — | request idempotency, refund-action idempotency, active-run ownership, approval replay, pre-execution re-verification |
-| Evaluation | — | 18 + 6 synthetic Chinese samples, deterministic scorer, reproducible real-model evaluation script |
-| Demo | generic chat page | role-aware workbench (identity switch, scenario buttons, approval card, audit timeline), API and browser golden-path scripts |
+| Evaluation | — | 120-case Chinese diagnostic set, bounded-concurrency runner, Wilson interval, per-scenario metrics, confusion matrix and reproducible real-model reports |
+| Demo | generic chat page | React/TypeScript operations console and Execution Runway; Streamlit retained as an internal workbench; API and browser golden paths |
 
 See [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md) for the full attribution and [`UPSTREAM.md`](UPSTREAM.md) for provenance. Upstream capabilities are not claimed as my own work.
 
@@ -115,7 +118,9 @@ Not claimed: exactly-once across a real payment provider (the refund is a mock; 
 
 The default history manifest was actually loaded into PostgreSQL 16: **1,000,000 orders, 235,924 tickets, 478,813 messages, 56,127 approvals and 1,475,896 audit events — 3,246,760 related rows** across 12 tenants and 730 days. The generator streams 20,000-order batches into foreign-key-ordered `COPY` transactions; the load took 196.360 s and all 21 cross-table quality checks passed. A dataset fingerprint makes reruns idempotent: the second load stage detected the registered data in 0.560 s and inserted nothing. Synthetic history and records produced by real Service/LangGraph runs are explicitly separated.
 
-The smaller executable workload covers 12 scenarios across 10 tenants and runs 1/10/30 concurrent in-process requests. Thirty identical requests produced one ticket/run; thirty identical approval calls executed one mock refund. These measurements exclude HTTP and real-model latency and are not production QPS. See [`docs/HISTORY_DATASET.md`](docs/HISTORY_DATASET.md) and [`docs/SCALE_DEMO.md`](docs/SCALE_DEMO.md) for commands, query plans, raw measurement boundaries and limitations.
+Two workloads keep their measurement boundaries explicit. The full `TicketService → LangGraph → PostgreSQL` path ran 200 requests at concurrency 1/10/30/100 with no failures; 100 identical creates produced one ticket/run and 100 identical approvals executed one mock refund. Throughput stopped scaling after concurrency 10 and P95 reached 9.515 s at concurrency 100, exposing a real capacity boundary.
+
+A separate HTTP read test traversed `Nginx → Uvicorn/FastAPI → Bearer → PostgreSQL`: 5,000/5,000 responses were 200 across concurrency 1/20/50/100/200. The local peak was about 199 req/s at concurrency 20; at 200 it was about 172 req/s with 1.524 s P95. It excludes LLM and writes, so it is neither Agent throughput nor a production SLA. See [`docs/HISTORY_DATASET.md`](docs/HISTORY_DATASET.md) and [`docs/SCALE_DEMO.md`](docs/SCALE_DEMO.md).
 
 ## Real-model evaluation
 
@@ -126,7 +131,9 @@ The smaller executable workload covers 12 scenarios across 10 tenants and runs 1
 | 18-sample dev set | 15/18 | 18/18 |
 | 6 targeted transfer samples | 4/6 | 5/6 |
 
-Single run on 2026-09-14 with `qwen3.7-flash`, temperature 0.5, about 13–15 s per sample. v2 changes only the system prompt (explicit full-refund flag, known-order inheritance, bare-order-number routing); the three original errors are fixed with no regressions, while one paraphrase of "refund everything I paid" still misses the flag and is kept as a known limitation. These are dev-set numbers, not production accuracy. Details in [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md).
+On 2026-09-15, a new 120-case diagnostic set (8 scenario families; 90 hard and 30 medium cases) produced **101/120 strict exact matches = 84.17%** with a Wilson 95% CI of **76.59%–89.62%**. Three call/schema errors remain in the denominator. The concentrated weakness was colloquial full-refund intent at 2/15.
+
+The investigation found that the OpenAI-compatible wire schema did not require every output field, so the provider could omit `full_refund_requested` and a local default silently became `false`. Requiring every field and removing defaults was followed by a declared 45-case targeted regression: **44/45 = 97.78%**, zero call errors, and full-refund improved from **2/15 to 15/15** while negation/cancellation stayed 15/15. This targeted score is not presented as a post-fix score for all 120 cases. Details and limitations are in [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md).
 
 One integration finding: the OpenAI-compatible provider rejected the JSON Schema regex generated for `Decimal` before the model ever answered; the wire schema now uses `number | null` and Pydantic still validates positivity, two decimals and the upper bound after the response.
 
@@ -139,7 +146,7 @@ cp .env.example .env            # keep at least the POSTGRES_* defaults
 docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml up -d --build
 ```
 
-Open `http://localhost:8501` and follow the five-minute script in [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md) (Chinese). Real-model mode (`TICKETPILOT_REASONER_MODE=llm` with `DEFAULT_MODEL` pointing at your provider) is described in section 2 of the same document.
+Open `http://localhost:3000` for the formal React operations console. `http://localhost:8501` remains the internal Streamlit workbench. See [`docs/WEB_CONSOLE.md`](docs/WEB_CONSOLE.md) and the five-minute script in [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md) (Chinese).
 
 Automated acceptance:
 
@@ -150,15 +157,11 @@ uv run --with playwright python scripts/ticketpilot_ui_e2e.py      # browser gol
 
 ## Screenshots
 
-Real-model mode (`qwen3.7-flash`, local backend): the answer only uses facts returned by the order tool and the retrieved policy chunk, the tracking number is masked, and the citation can be expanded next to the reply.
-
-<img src="media/ticketpilot/llm-01-logistics-answered.png" width="900" alt="Shipping query answered in real-model mode">
-
-| Vague refund → waiting for input | Approver view | Cross-tenant lookup → 404 |
+| Operations overview | Ticket queue | Idempotency interview demo |
 | --- | --- | --- |
-| <img src="media/ticketpilot/03-needs-input.png" width="290"> | <img src="media/ticketpilot/05-approver-view.png" width="290"> | <img src="media/ticketpilot/08-cross-tenant-404.png" width="290"> |
+| <img src="media/ticketpilot/web-overview.png" width="290"> | <img src="media/ticketpilot/web-tickets.png" width="290"> | <img src="media/ticketpilot/web-demo.png" width="290"> |
 
-All screenshots live in [`media/ticketpilot/`](media/ticketpilot/) and are produced by `scripts/ticketpilot_ui_e2e.py`; the `llm-*` ones come from the real-model backend, the rest from the deterministic demo backend. The same golden path passes on both (55 s deterministic, 108 s with the real model). The UI is in Chinese.
+The responsive React console is the interview-facing product surface; the existing `llm-*` and deterministic Streamlit captures remain as internal workflow evidence in [`media/ticketpilot/`](media/ticketpilot/).
 
 ## Tests
 
@@ -169,7 +172,7 @@ uv run pytest tests/ticketpilot --run-docker   # needs the compose PostgreSQL
 uv run ruff check src tests scripts
 ```
 
-Results on 2026-09-15, Windows 11 / Python 3.12: default suite `295 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `112 passed`; service isolation 8 passed; browser golden path 8/8 steps in about 55 s. The selections overlap and must not be summed.
+Results on 2026-09-15, Windows 11 / Python 3.12: default suite `297 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `114 passed`; service isolation 6 passed; the React browser check has zero console errors, a 390 px no-overflow viewport and a same-key retry returning the same ticket/run. The selections overlap and must not be summed.
 
 ## Layout
 
@@ -177,11 +180,12 @@ Results on 2026-09-15, Windows 11 / Python 3.12: default suite `295 passed, 39 s
 src/ticketpilot/             business code: api / services / repositories / workflow_repository / graph / tools / reasoning / schemas / domain
 src/ticketpilot_streamlit.py demo workbench
 src/client/ticketpilot.py    business API client
+frontend/                    React Router console: overview / tickets / approvals / interview demo
 migrations/ticketpilot/      versioned SQL migrations 0001–0008
 data/ticketpilot/            synthetic order/history manifests, policy corpus, classification eval sets
 scripts/                     API/browser acceptance, million-history load, scale/concurrency and real-model evaluation
 tests/ticketpilot/           API, isolation, repository, run ownership, refund semantics, graph and scorer tests
-docs/                        ARCHITECTURE, CONTRIBUTION_MAP, DATASET_STRATEGY, TICKETPILOT_DEMO, adr/
+docs/                        ARCHITECTURE, WEB_CONSOLE, CONTRIBUTION_MAP, dataset/scale docs, adr/
 ```
 
 ## Upstream toolkit and generic mode
