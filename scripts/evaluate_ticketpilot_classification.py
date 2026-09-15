@@ -83,7 +83,11 @@ def main() -> None:
                 "timeout_seconds": 60,
                 "request_concurrency": args.concurrency,
                 "selected_scenarios": args.scenario,
-                "note": "Bounded-concurrency evaluation; SDK retries may occur. No cost estimate.",
+                "thinking": "disabled for Qwen/DeepSeek compatible routes",
+                "max_output_tokens": 1200,
+                "sdk_retries": 0,
+                "application_retries": 1,
+                "note": "Classification plus deterministic reference/full-refund guards. All errors remain in denominator. No cost estimate.",
             },
         )
     )

@@ -1,0 +1,9 @@
+services:
+  agent_service:
+    environment:
+      USE_FAKE_MODEL: "false"
+      DEFAULT_MODEL: openai-compatible
+      TICKETPILOT_REASONER_MODE: llm
+      TICKETPILOT_RETRIEVAL_STRATEGY: rerank
+    healthcheck:
+      start_period: 300s

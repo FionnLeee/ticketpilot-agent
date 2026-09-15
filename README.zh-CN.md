@@ -2,6 +2,8 @@
 
 [English](README.md) | 简体中文
 
+**2026-09-15 补强：**新增 163 条政策语料、BM25/BGE 混合检索与重排、版本过滤、引用校验、运行预算与前端执行指标。[实现、实测结果和已知失败](docs/PRODUCTIONIZATION.md)。第二项目仍在规划阶段。
+
 > 基于开源 [`agent-service-toolkit`](https://github.com/JoshuaC215/agent-service-toolkit)（MIT）二次开发。
 > **模型负责理解语言；确定性代码、PostgreSQL 和人工审批控制权限、状态与副作用。**
 

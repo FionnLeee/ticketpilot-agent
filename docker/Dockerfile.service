@@ -8,7 +8,7 @@ ENV UV_COMPILE_BYTECODE=1
 COPY pyproject.toml .
 COPY uv.lock .
 RUN pip install --no-cache-dir uv==0.11.32
-RUN uv sync --frozen --no-install-project --no-dev
+RUN uv sync --frozen --no-install-project --no-dev --extra retrieval
 
 COPY src/agents/ ./agents/
 COPY src/core/ ./core/

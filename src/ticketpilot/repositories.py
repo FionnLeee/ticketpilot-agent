@@ -1,7 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, LiteralString
 from uuid import UUID, uuid4
 
 from psycopg.types.json import Jsonb
@@ -479,7 +479,7 @@ class TicketRepository:
         self, principal: RequestPrincipal, limit: int
     ) -> list[dict[str, Any]]:
         async with self.pool.connection() as connection:
-            customer_filter = "AND t.customer_id = %s" if principal.role is PrincipalRole.CUSTOMER else ""
+            customer_filter: LiteralString = "AND t.customer_id = %s" if principal.role is PrincipalRole.CUSTOMER else ""
             params: tuple[Any, ...] = (
                 (principal.tenant_id, principal.actor_id, limit)
                 if principal.role is PrincipalRole.CUSTOMER

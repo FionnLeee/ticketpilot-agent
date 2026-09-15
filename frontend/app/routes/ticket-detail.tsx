@@ -48,11 +48,13 @@ export default function TicketDetailPage() {
         </div>
       </section>
 
+      <RuntimeDetails events={events.data?.events ?? []} />
+
       <div className="workspace-grid">
         <section className="panel conversation-panel">
           <div className="panel-title"><div><span className="eyebrow">CONVERSATION</span><h2>客户与 Agent</h2></div><span>{ticket.messages.length} messages</span></div>
           <div className="messages">
-            {ticket.messages.map((message) => <article className={`message message-${message.role.toLowerCase()}`} key={message.id}><div className="message-avatar">{message.role === "AGENT" ? <Bot /> : <UserRound />}</div><div><header><strong>{message.role === "AGENT" ? "TicketPilot Agent" : "客户"}</strong><time>{formatTime(message.created_at)}</time></header><p>{message.content}</p>{message.citations.length ? <div className="citations">{message.citations.map((citation) => <span key={citation.source_id}><Database size={13} />{citation.title}</span>)}</div> : null}</div></article>)}
+            {ticket.messages.map((message) => <article className={`message message-${message.role.toLowerCase()}`} key={message.id}><div className="message-avatar">{message.role === "AGENT" ? <Bot /> : <UserRound />}</div><div><header><strong>{message.role === "AGENT" ? "TicketPilot Agent" : "客户"}</strong><time>{formatTime(message.created_at)}</time></header><p>{message.content}</p>{message.citations.length ? <div className="citations">{message.citations.map((citation) => <details key={citation.chunk_id ?? citation.source_id}><summary><Database size={13} />{citation.title} · {citation.policy_version ?? "v1"}</summary><p>{citation.excerpt}</p><small>{citation.chunk_id ?? citation.source_id}{citation.effective_at ? ` · 生效 ${formatTime(citation.effective_at)}` : ""}</small></details>)}</div> : null}</div></article>)}
           </div>
           {mode === "customer" ? <MessageComposer ticketId={ticket.id} /> : null}
         </section>
@@ -64,6 +66,22 @@ export default function TicketDetailPage() {
       </div>
     </div>
   );
+}
+
+function RuntimeDetails({ events }: { events: RunEvent[] }) {
+  const summary = events.find((event) => event.event_type === "RUN_TELEMETRY")?.details;
+  const retrieval = events.find((event) => event.tool_name === "search_policy")?.details;
+  if (!summary) return null;
+  return <section className="panel context-card runtime-card">
+    <span className="eyebrow">RUN METRICS</span><h3>执行记录</h3>
+    <dl><div><dt>本轮耗时</dt><dd>{Number(summary.duration_ms) / 1000} s</dd></div>
+      <div><dt>模型调用（含重试）</dt><dd>{String(summary.model_calls)}</dd></div>
+      <div><dt>输入 / 输出 token</dt><dd>{summary.usage_complete ? `${summary.input_tokens} / ${summary.output_tokens}` : "供应商未完整返回"}</dd></div>
+      <div><dt>预估费用</dt><dd>未配置价格</dd></div>
+      <div><dt>政策检索</dt><dd>{String(retrieval?.retrieval_strategy ?? "legacy")}</dd></div>
+    </dl>
+    <details><summary>查看各步骤耗时与结果</summary><dl>{events.filter((event) => event.event_type === "MODEL_CALL" || event.tool_name).map((event) => <div key={event.id}><dt>{event.tool_name ?? event.node_name} {event.details.attempt ? `#${event.details.attempt}` : ""}</dt><dd>{String(event.details.duration_ms ?? "—")} ms · {event.outcome}</dd></div>)}</dl></details>
+  </section>;
 }
 
 function MessageComposer({ ticketId }: { ticketId: string }) {

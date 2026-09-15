@@ -1,0 +1,3631 @@
+{
+  "dataset_id": "ticketpilot-classification-eval-v2",
+  "split": "evaluation",
+  "started_at": "2026-09-15T15:14:36.560273+00:00",
+  "metadata": {
+    "dataset_sha256": "965070f72e1d2cec37a6987a349ba6123365f34bc2e3d62678d4e5911f849d61",
+    "code_revision": "3c3ac2a565fa048c6e456d127a2d4a6c7e70a7e3",
+    "working_tree_dirty": true,
+    "reasoning_sha256": "b026640c409aef06a77d4eeafb0f187461b12bd2aab3b6858b2e0b3979a4560e",
+    "model_route": "openai-compatible",
+    "model_name": "qwen3.7-flash",
+    "temperature": 0.5,
+    "timeout_seconds": 60,
+    "request_concurrency": 4,
+    "selected_scenarios": null,
+    "note": "Bounded-concurrency evaluation; SDK retries may occur. No cost estimate."
+  },
+  "scored_fields": [
+    "category",
+    "order_reference",
+    "requested_refund_amount",
+    "full_refund_requested"
+  ],
+  "case_count": 120,
+  "error_count": 0,
+  "concurrency": 4,
+  "exact_match_accuracy": 0.9333333333333333,
+  "exact_match_wilson_95": [
+    0.8739473292228184,
+    0.9658351025287095
+  ],
+  "field_accuracy": {
+    "category": 0.9833333333333333,
+    "order_reference": 0.9833333333333333,
+    "requested_refund_amount": 1.0,
+    "full_refund_requested": 0.9666666666666667
+  },
+  "scenario_accuracy": {
+    "context_reference": {
+      "correct": 10,
+      "total": 10,
+      "accuracy": 1.0
+    },
+    "full_refund": {
+      "correct": 14,
+      "total": 15,
+      "accuracy": 0.9333333333333333
+    },
+    "logistics": {
+      "correct": 20,
+      "total": 20,
+      "accuracy": 1.0
+    },
+    "negation_cancel": {
+      "correct": 14,
+      "total": 15,
+      "accuracy": 0.9333333333333333
+    },
+    "other": {
+      "correct": 9,
+      "total": 10,
+      "accuracy": 0.9
+    },
+    "policy_only": {
+      "correct": 14,
+      "total": 15,
+      "accuracy": 0.9333333333333333
+    },
+    "refund_amount": {
+      "correct": 25,
+      "total": 25,
+      "accuracy": 1.0
+    },
+    "refund_missing_slot": {
+      "correct": 6,
+      "total": 10,
+      "accuracy": 0.6
+    }
+  },
+  "difficulty_accuracy": {
+    "hard": {
+      "correct": 83,
+      "total": 90,
+      "accuracy": 0.9222222222222223
+    },
+    "medium": {
+      "correct": 29,
+      "total": 30,
+      "accuracy": 0.9666666666666667
+    }
+  },
+  "category_metrics": {
+    "ORDER_STATUS": {
+      "precision": 0.9714285714285714,
+      "recall": 1.0,
+      "f1": 0.9855072463768115,
+      "support": 34
+    },
+    "OTHER": {
+      "precision": 1.0,
+      "recall": 0.9,
+      "f1": 0.9473684210526316,
+      "support": 20
+    },
+    "POLICY": {
+      "precision": 0.9411764705882353,
+      "recall": 1.0,
+      "f1": 0.9696969696969697,
+      "support": 16
+    },
+    "REFUND": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 50
+    }
+  },
+  "category_confusion_matrix": {
+    "ORDER_STATUS": {
+      "ORDER_STATUS": 34,
+      "OTHER": 0,
+      "POLICY": 0,
+      "REFUND": 0
+    },
+    "OTHER": {
+      "ORDER_STATUS": 1,
+      "OTHER": 18,
+      "POLICY": 1,
+      "REFUND": 0
+    },
+    "POLICY": {
+      "ORDER_STATUS": 0,
+      "OTHER": 0,
+      "POLICY": 16,
+      "REFUND": 0
+    },
+    "REFUND": {
+      "ORDER_STATUS": 0,
+      "OTHER": 0,
+      "POLICY": 0,
+      "REFUND": 50
+    }
+  },
+  "latency_ms": {
+    "p50": 883.12,
+    "p95": 1127.18,
+    "p99": 1396.43
+  },
+  "cases": [
+    {
+      "case_id": "E001",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "订单 TP-1001 到哪儿了？",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-1001",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-1001",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 995.68,
+      "error_type": null
+    },
+    {
+      "case_id": "E002",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "帮我看看 O-CN-8842 什么时候能送到",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-CN-8842",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-CN-8842",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1023.29,
+      "error_type": null
+    },
+    {
+      "case_id": "E003",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "快递显示三天没动，单号 TP-1099",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-1099",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-1099",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 988.29,
+      "error_type": null
+    },
+    {
+      "case_id": "E004",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "查下订单 TP-2003 的签收状态",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-2003",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-2003",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1079.45,
+      "error_type": null
+    },
+    {
+      "case_id": "E005",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "O-SH-20260915-77",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-SH-20260915-77",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-SH-20260915-77",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1147.92,
+      "error_type": null
+    },
+    {
+      "case_id": "E006",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "这个包裹是哪个承运商？",
+      "known_order_reference": "TP-3001",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-3001",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-3001",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 893.25,
+      "error_type": null
+    },
+    {
+      "case_id": "E007",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "预计送达时间有变化吗",
+      "known_order_reference": "TP-3002",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-3002",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "LOW",
+        "order_reference": "TP-3002",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 930.0,
+      "error_type": null
+    },
+    {
+      "case_id": "E008",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "我只想查物流，订单 TP-3003",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-3003",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "LOW",
+        "order_reference": "TP-3003",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 905.35,
+      "error_type": null
+    },
+    {
+      "case_id": "E009",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "where is order O-INTL-91",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-INTL-91",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-INTL-91",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 966.36,
+      "error_type": null
+    },
+    {
+      "case_id": "E010",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "TP-4110 现在是已发货还是处理中？",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-4110",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-4110",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 872.33,
+      "error_type": null
+    },
+    {
+      "case_id": "E011",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "之前那单什么时候送达",
+      "known_order_reference": "TP-4111",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-4111",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-4111",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 849.73,
+      "error_type": null
+    },
+    {
+      "case_id": "E012",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "物流轨迹断了，麻烦查 TP-4112",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-4112",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-4112",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 785.89,
+      "error_type": null
+    },
+    {
+      "case_id": "E013",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "订单 O-A9-B8-C7 的配送信息",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-A9-B8-C7",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-A9-B8-C7",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 888.0,
+      "error_type": null
+    },
+    {
+      "case_id": "E014",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "查新订单 TP-5002，不是之前那单",
+      "known_order_reference": "TP-5001",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-5002",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-5002",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 852.9,
+      "error_type": null
+    },
+    {
+      "case_id": "E015",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "我昨天下单的 TP-5003 发货了吗",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-5003",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-5003",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 922.93,
+      "error_type": null
+    },
+    {
+      "case_id": "E016",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "能给我 TP-5004 的脱敏运单号吗",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-5004",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-5004",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 858.41,
+      "error_type": null
+    },
+    {
+      "case_id": "E017",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "只查询，不做任何变更：O-READ-88",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-READ-88",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "LOW",
+        "order_reference": "O-READ-88",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 966.62,
+      "error_type": null
+    },
+    {
+      "case_id": "E018",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "包裹还在路上吗？",
+      "known_order_reference": "TP-5005",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-5005",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-5005",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 906.55,
+      "error_type": null
+    },
+    {
+      "case_id": "E019",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "订单 TP-5006 是不是取消了",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-5006",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-5006",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 903.54,
+      "error_type": null
+    },
+    {
+      "case_id": "E020",
+      "scenario_family": "logistics",
+      "difficulty": "medium",
+      "message": "麻烦确认 O-2026-X1 当前履约状态",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-2026-X1",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-2026-X1",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 940.18,
+      "error_type": null
+    },
+    {
+      "case_id": "E021",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "订单 TP-6101 退 20 元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6101",
+        "requested_refund_amount": "20"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6101",
+        "requested_refund_amount": "20.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 886.68,
+      "error_type": null
+    },
+    {
+      "case_id": "E022",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "O-R-6102 请退款12.50元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-R-6102",
+        "requested_refund_amount": "12.50"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-R-6102",
+        "requested_refund_amount": "12.5"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 875.45,
+      "error_type": null
+    },
+    {
+      "case_id": "E023",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "TP-6103 我只要退0.01元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6103",
+        "requested_refund_amount": "0.01"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6103",
+        "requested_refund_amount": "0.01"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 931.23,
+      "error_type": null
+    },
+    {
+      "case_id": "E024",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "这单退一百块，订单 TP-6104",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6104",
+        "requested_refund_amount": "100"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6104",
+        "requested_refund_amount": "100.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 992.7,
+      "error_type": null
+    },
+    {
+      "case_id": "E025",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "订单 TP-6105 实付500元，请退30元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6105",
+        "requested_refund_amount": "30"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6105",
+        "requested_refund_amount": "30.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 909.09,
+      "error_type": null
+    },
+    {
+      "case_id": "E026",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "9月15日买的 TP-6106，退款15元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6106",
+        "requested_refund_amount": "15"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6106",
+        "requested_refund_amount": "15.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 901.11,
+      "error_type": null
+    },
+    {
+      "case_id": "E027",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "把 O-R-6107 的 88.80 CNY 退回来",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-R-6107",
+        "requested_refund_amount": "88.80"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-R-6107",
+        "requested_refund_amount": "88.8"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 853.41,
+      "error_type": null
+    },
+    {
+      "case_id": "E028",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "上次说的订单退6元",
+      "known_order_reference": "TP-6108",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6108",
+        "requested_refund_amount": "6"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6108",
+        "requested_refund_amount": "6.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 898.28,
+      "error_type": null
+    },
+    {
+      "case_id": "E029",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "不是60元，是退16元，TP-6109",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6109",
+        "requested_refund_amount": "16"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6109",
+        "requested_refund_amount": "16.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 894.2,
+      "error_type": null
+    },
+    {
+      "case_id": "E030",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "订单号 TP-6110，账户余额900元，本次退款9元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6110",
+        "requested_refund_amount": "9"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6110",
+        "requested_refund_amount": "9.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1007.89,
+      "error_type": null
+    },
+    {
+      "case_id": "E031",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "请为 O-R-6111 发起 120.25 元退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-R-6111",
+        "requested_refund_amount": "120.25"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-R-6111",
+        "requested_refund_amount": "120.25"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 877.83,
+      "error_type": null
+    },
+    {
+      "case_id": "E032",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "TP-6112 退人民币7块5毛",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6112",
+        "requested_refund_amount": "7.5"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6112",
+        "requested_refund_amount": "7.5"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 872.59,
+      "error_type": null
+    },
+    {
+      "case_id": "E033",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "订单 TP-6113 退 7.5 元，不是全额",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6113",
+        "requested_refund_amount": "7.5"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6113",
+        "requested_refund_amount": "7.5"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 938.63,
+      "error_type": null
+    },
+    {
+      "case_id": "E034",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "只退25元，其余不要动，TP-6114",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6114",
+        "requested_refund_amount": "25"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6114",
+        "requested_refund_amount": "25.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 868.39,
+      "error_type": null
+    },
+    {
+      "case_id": "E035",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "refund 19 yuan for order O-R-6115",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-R-6115",
+        "requested_refund_amount": "19"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-R-6115",
+        "requested_refund_amount": "19.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 909.19,
+      "error_type": null
+    },
+    {
+      "case_id": "E036",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "O-R-6116 退款 3.33",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-R-6116",
+        "requested_refund_amount": "3.33"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-R-6116",
+        "requested_refund_amount": "3.33"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 893.96,
+      "error_type": null
+    },
+    {
+      "case_id": "E037",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "订单 TP-6117 请退3.33元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6117",
+        "requested_refund_amount": "3.33"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6117",
+        "requested_refund_amount": "3.33"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 959.06,
+      "error_type": null
+    },
+    {
+      "case_id": "E038",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "之前 TP-0001 不管了，给 TP-6118 退40元",
+      "known_order_reference": "TP-0001",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6118",
+        "requested_refund_amount": "40"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6118",
+        "requested_refund_amount": "40.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1060.96,
+      "error_type": null
+    },
+    {
+      "case_id": "E039",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "退 1 元测试一下，订单 O-R-6119",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-R-6119",
+        "requested_refund_amount": "1"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-R-6119",
+        "requested_refund_amount": "1.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 913.25,
+      "error_type": null
+    },
+    {
+      "case_id": "E040",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "我要为 TP-6120 申请部分退款 200 元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6120",
+        "requested_refund_amount": "200"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6120",
+        "requested_refund_amount": "200.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 978.85,
+      "error_type": null
+    },
+    {
+      "case_id": "E041",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "订单 TP-6121 的商品不对，退55.55元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6121",
+        "requested_refund_amount": "55.55"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6121",
+        "requested_refund_amount": "55.55"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1173.74,
+      "error_type": null
+    },
+    {
+      "case_id": "E042",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "请原路退回 18 元到 TP-6122 的支付账户",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6122",
+        "requested_refund_amount": "18"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6122",
+        "requested_refund_amount": "18.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 910.24,
+      "error_type": null
+    },
+    {
+      "case_id": "E043",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "TP-6123 本次明确申请退款 66 元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6123",
+        "requested_refund_amount": "66"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6123",
+        "requested_refund_amount": "66.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 906.85,
+      "error_type": null
+    },
+    {
+      "case_id": "E044",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "我想退2块钱，单子是 O-R-6124",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-R-6124",
+        "requested_refund_amount": "2"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-R-6124",
+        "requested_refund_amount": "2.0"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 887.94,
+      "error_type": null
+    },
+    {
+      "case_id": "E045",
+      "scenario_family": "refund_amount",
+      "difficulty": "hard",
+      "message": "订单 TP-6125，支付日是12号，只退12.01元",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-6125",
+        "requested_refund_amount": "12.01"
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-6125",
+        "requested_refund_amount": "12.01"
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1021.85,
+      "error_type": null
+    },
+    {
+      "case_id": "E046",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "订单 TP-7001 我要全额退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7001",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7001",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 841.34,
+      "error_type": null
+    },
+    {
+      "case_id": "E047",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "O-FULL-02 支付的钱全部退给我",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "O-FULL-02",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-FULL-02",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 848.87,
+      "error_type": null
+    },
+    {
+      "case_id": "E048",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "TP-7003 整单金额原路退回",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7003",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7003",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 824.3,
+      "error_type": null
+    },
+    {
+      "case_id": "E049",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "这单我一分钱都不留，全部退款",
+      "known_order_reference": "TP-7004",
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7004",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": false,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": false,
+      "latency_ms": 1258.2,
+      "error_type": null
+    },
+    {
+      "case_id": "E050",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "full refund for O-FULL-05",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "O-FULL-05",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-FULL-05",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 893.38,
+      "error_type": null
+    },
+    {
+      "case_id": "E051",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "订单 TP-7006 请按可退余额全部退",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7006",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7006",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 833.26,
+      "error_type": null
+    },
+    {
+      "case_id": "E052",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "我要退掉整笔付款，TP-7007",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7007",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7007",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 847.97,
+      "error_type": null
+    },
+    {
+      "case_id": "E053",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "O-FULL-08 申请全退，不是部分退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "O-FULL-08",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-FULL-08",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 921.67,
+      "error_type": null
+    },
+    {
+      "case_id": "E054",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "把上一单的所有可退款金额退回",
+      "known_order_reference": "TP-7009",
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7009",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7009",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 919.95,
+      "error_type": null
+    },
+    {
+      "case_id": "E055",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "TP-7010 全部退回支付账户",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7010",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7010",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 840.99,
+      "error_type": null
+    },
+    {
+      "case_id": "E056",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "订单 O-FULL-11 我要求整单退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "O-FULL-11",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-FULL-11",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 846.58,
+      "error_type": null
+    },
+    {
+      "case_id": "E057",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "不接受换货，TP-7012 请全额退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7012",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7012",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 951.02,
+      "error_type": null
+    },
+    {
+      "case_id": "E058",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "我要全退 O-FULL-13 的款项",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "O-FULL-13",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-FULL-13",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1000.86,
+      "error_type": null
+    },
+    {
+      "case_id": "E059",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "TP-7014 按剩余可退金额全部退掉",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7014",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7014",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1443.2,
+      "error_type": null
+    },
+    {
+      "case_id": "E060",
+      "scenario_family": "full_refund",
+      "difficulty": "hard",
+      "message": "这次不是问规则，订单 TP-7015 确认申请全额退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "order_reference": "TP-7015",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7015",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 812.33,
+      "error_type": null
+    },
+    {
+      "case_id": "E061",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "订单 TP-7201 我要退款，金额稍后说",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-7201",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7201",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 963.05,
+      "error_type": null
+    },
+    {
+      "case_id": "E062",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "帮我发起退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 853.97,
+      "error_type": null
+    },
+    {
+      "case_id": "E063",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "上一单想退一部分",
+      "known_order_reference": "TP-7203",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-7203",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7203",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 806.82,
+      "error_type": null
+    },
+    {
+      "case_id": "E064",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "O-PART-04 退款，但不是全退",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-PART-04",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-PART-04",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 812.56,
+      "error_type": null
+    },
+    {
+      "case_id": "E065",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "这个订单能给我退钱吗？我要申请，不是问政策",
+      "known_order_reference": "TP-7205",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-7205",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7205",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": false
+      },
+      "exact_match": false,
+      "latency_ms": 851.7,
+      "error_type": null
+    },
+    {
+      "case_id": "E066",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "TP-7206 实付300元，我想退款，数额还没定",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-7206",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7206",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 923.62,
+      "error_type": null
+    },
+    {
+      "case_id": "E067",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "申请退款 O-PART-07",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "O-PART-07",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "O-PART-07",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": false
+      },
+      "exact_match": false,
+      "latency_ms": 860.77,
+      "error_type": null
+    },
+    {
+      "case_id": "E068",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "东西坏了，我要退费",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": false
+      },
+      "exact_match": false,
+      "latency_ms": 813.01,
+      "error_type": null
+    },
+    {
+      "case_id": "E069",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "TP-7209 先登记退款诉求",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-7209",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7209",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 769.61,
+      "error_type": null
+    },
+    {
+      "case_id": "E070",
+      "scenario_family": "refund_missing_slot",
+      "difficulty": "hard",
+      "message": "我要把这单退掉，但暂时不要猜金额",
+      "known_order_reference": "TP-7210",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "REFUND",
+        "order_reference": "TP-7210",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": true,
+        "category": "REFUND",
+        "priority": "NORMAL",
+        "order_reference": "TP-7210",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": false
+      },
+      "exact_match": false,
+      "latency_ms": 869.65,
+      "error_type": null
+    },
+    {
+      "case_id": "E071",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "退款规则是什么？",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 779.02,
+      "error_type": null
+    },
+    {
+      "case_id": "E072",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "签收超过七天还能退吗",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 786.59,
+      "error_type": null
+    },
+    {
+      "case_id": "E073",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "我只是咨询全额退款条件，不要发起申请",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1127.18,
+      "error_type": null
+    },
+    {
+      "case_id": "E074",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "订单 TP-8004 适用哪条退款政策？先不退",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": "TP-8004",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": "TP-8004",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 939.54,
+      "error_type": null
+    },
+    {
+      "case_id": "E075",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "退货运费由谁承担",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 760.61,
+      "error_type": null
+    },
+    {
+      "case_id": "E076",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "优惠券退款后会返还吗",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 844.82,
+      "error_type": null
+    },
+    {
+      "case_id": "E077",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "换货的时限是多少天",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 824.08,
+      "error_type": null
+    },
+    {
+      "case_id": "E078",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "O-POLICY-08 是否支持部分退款？仅咨询",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": "O-POLICY-08",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": false,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": false,
+      "latency_ms": 832.05,
+      "error_type": null
+    },
+    {
+      "case_id": "E079",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "保修政策覆盖人为损坏吗",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 777.98,
+      "error_type": null
+    },
+    {
+      "case_id": "E080",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "发票开出后退款有什么规则",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 875.44,
+      "error_type": null
+    },
+    {
+      "case_id": "E081",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "积分抵扣部分如何计算退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 819.48,
+      "error_type": null
+    },
+    {
+      "case_id": "E082",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "跨境订单的退货期限",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 731.16,
+      "error_type": null
+    },
+    {
+      "case_id": "E083",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "我不申请退款，只想知道政策",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 981.41,
+      "error_type": null
+    },
+    {
+      "case_id": "E084",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "全额退款的审核条件有哪些",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 856.91,
+      "error_type": null
+    },
+    {
+      "case_id": "E085",
+      "scenario_family": "policy_only",
+      "difficulty": "hard",
+      "message": "上一个订单 TP-8015 的规则是什么",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": "TP-8015",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "LOW",
+        "order_reference": "TP-8015",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 920.85,
+      "error_type": null
+    },
+    {
+      "case_id": "E086",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "订单 TP-9001 不要退款，只查物流",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9001",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9001",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1040.48,
+      "error_type": null
+    },
+    {
+      "case_id": "E087",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "取消退款申请，不用退了",
+      "known_order_reference": "TP-9002",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9002",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "LOW",
+        "order_reference": "TP-9002",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 822.6,
+      "error_type": null
+    },
+    {
+      "case_id": "E088",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "O-NO-03 no refund, tell me delivery status",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-NO-03",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-NO-03",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 798.91,
+      "error_type": null
+    },
+    {
+      "case_id": "E089",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "别退钱，帮我看 TP-9004 到哪了",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9004",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9004",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 967.04,
+      "error_type": null
+    },
+    {
+      "case_id": "E090",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "撤销刚才对 TP-9005 的退款",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9005",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": "TP-9005",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 793.51,
+      "error_type": null
+    },
+    {
+      "case_id": "E091",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "我没说要退款，只是在描述问题",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 808.23,
+      "error_type": null
+    },
+    {
+      "case_id": "E092",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "暂时不退了，谢谢",
+      "known_order_reference": "TP-9007",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9007",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "LOW",
+        "order_reference": "TP-9007",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 767.85,
+      "error_type": null
+    },
+    {
+      "case_id": "E093",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "订单 O-NO-08 的退款不要执行",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "O-NO-08",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": "O-NO-08",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 810.46,
+      "error_type": null
+    },
+    {
+      "case_id": "E094",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "不是申请退款，是问物流 TP-9009",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9009",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9009",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 892.43,
+      "error_type": null
+    },
+    {
+      "case_id": "E095",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "请停止 TP-9010 的退费流程",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9010",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": "TP-9010",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 992.96,
+      "error_type": null
+    },
+    {
+      "case_id": "E096",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "退款两个字不要触发任何动作",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": false,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": false,
+      "latency_ms": 845.44,
+      "error_type": null
+    },
+    {
+      "case_id": "E097",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "我改变主意了，不退 TP-9012",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9012",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "LOW",
+        "order_reference": "TP-9012",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1025.62,
+      "error_type": null
+    },
+    {
+      "case_id": "E098",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "不要全额退款，只告诉我政策",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "POLICY",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 792.61,
+      "error_type": null
+    },
+    {
+      "case_id": "E099",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "取消，不需要退回20元",
+      "known_order_reference": "TP-9014",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9014",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": "TP-9014",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 933.75,
+      "error_type": null
+    },
+    {
+      "case_id": "E100",
+      "scenario_family": "negation_cancel",
+      "difficulty": "hard",
+      "message": "TP-9015 不退款，继续正常发货",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9015",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": "TP-9015",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 881.94,
+      "error_type": null
+    },
+    {
+      "case_id": "E101",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "谢谢你的帮助",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 883.12,
+      "error_type": null
+    },
+    {
+      "case_id": "E102",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "怎么修改收货地址",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 798.37,
+      "error_type": null
+    },
+    {
+      "case_id": "E103",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "人工客服几点上班",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 719.19,
+      "error_type": null
+    },
+    {
+      "case_id": "E104",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "商品有色差",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 774.34,
+      "error_type": null
+    },
+    {
+      "case_id": "E105",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "帮我催一下",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": false,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": false,
+      "latency_ms": 867.27,
+      "error_type": null
+    },
+    {
+      "case_id": "E106",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "你好",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 694.91,
+      "error_type": null
+    },
+    {
+      "case_id": "E107",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "我想投诉配送员",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 738.04,
+      "error_type": null
+    },
+    {
+      "case_id": "E108",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "订单 TP-9908 的备注能改吗",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": "TP-9908",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": "TP-9908",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 822.39,
+      "error_type": null
+    },
+    {
+      "case_id": "E109",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "请转人工",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "NORMAL",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 750.09,
+      "error_type": null
+    },
+    {
+      "case_id": "E110",
+      "scenario_family": "other",
+      "difficulty": "medium",
+      "message": "这个回答解决了我的问题",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "OTHER",
+        "priority": "LOW",
+        "order_reference": null,
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 769.37,
+      "error_type": null
+    },
+    {
+      "case_id": "E111",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "TP-9501",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9501",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9501",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 956.56,
+      "error_type": null
+    },
+    {
+      "case_id": "E112",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "O-BARE-02",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-BARE-02",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-BARE-02",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 793.45,
+      "error_type": null
+    },
+    {
+      "case_id": "E113",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "查新单 TP-9503",
+      "known_order_reference": "TP-0001",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9503",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9503",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 900.39,
+      "error_type": null
+    },
+    {
+      "case_id": "E114",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "还是之前那一单",
+      "known_order_reference": "TP-9504",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9504",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9504",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 999.26,
+      "error_type": null
+    },
+    {
+      "case_id": "E115",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "订单号是 TP-9505",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9505",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "LOW",
+        "order_reference": "TP-9505",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 801.17,
+      "error_type": null
+    },
+    {
+      "case_id": "E116",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "not O-OLD-1, check O-NEW-6",
+      "known_order_reference": "O-OLD-1",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-NEW-6",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "LOW",
+        "order_reference": "O-NEW-6",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 918.03,
+      "error_type": null
+    },
+    {
+      "case_id": "E117",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "就这个订单",
+      "known_order_reference": "TP-9507",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9507",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "LOW",
+        "order_reference": "TP-9507",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 849.21,
+      "error_type": null
+    },
+    {
+      "case_id": "E118",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "麻烦看一下 O-CONTEXT-8",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "O-CONTEXT-8",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "O-CONTEXT-8",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1289.23,
+      "error_type": null
+    },
+    {
+      "case_id": "E119",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "我说的是 TP-9509",
+      "known_order_reference": "TP-9508",
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9509",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9509",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 831.96,
+      "error_type": null
+    },
+    {
+      "case_id": "E120",
+      "scenario_family": "context_reference",
+      "difficulty": "hard",
+      "message": "TP-9510？",
+      "known_order_reference": null,
+      "expected": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "order_reference": "TP-9510",
+        "requested_refund_amount": null
+      },
+      "actual": {
+        "full_refund_requested": false,
+        "category": "ORDER_STATUS",
+        "priority": "NORMAL",
+        "order_reference": "TP-9510",
+        "requested_refund_amount": null
+      },
+      "field_matches": {
+        "category": true,
+        "order_reference": true,
+        "requested_refund_amount": true,
+        "full_refund_requested": true
+      },
+      "exact_match": true,
+      "latency_ms": 1396.43,
+      "error_type": null
+    }
+  ]
+}

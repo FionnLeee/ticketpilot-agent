@@ -8,8 +8,8 @@ from core.settings import TicketPilotReasonerMode, settings
 from ticketpilot.auth import get_request_principal
 from ticketpilot.db import BusinessPool
 from ticketpilot.errors import TicketPilotError, TicketPilotUnavailable
+from ticketpilot.observability import ExecutionLimits
 from ticketpilot.orders import PostgresOrderRepository
-from ticketpilot.policies import LocalPolicyRetriever
 from ticketpilot.reasoning import DeterministicDemoReasoner, LangChainTicketReasoner
 from ticketpilot.repositories import TicketRepository
 from ticketpilot.schemas import (
@@ -56,8 +56,14 @@ def get_ticket_service(
         workflow=workflow,
         workflow_repository=TicketWorkflowRepository(pool),
         order_reader=PostgresOrderRepository(pool),
-        policy_retriever=LocalPolicyRetriever(),
+        policy_retriever=request.app.state.ticketpilot_retriever,
         reasoner=reasoner,
+        execution_limits=ExecutionLimits(
+            deadline_seconds=settings.TICKETPILOT_RUN_DEADLINE,
+            call_timeout_seconds=settings.TICKETPILOT_CALL_TIMEOUT,
+            max_model_calls=settings.TICKETPILOT_MAX_MODEL_CALLS,
+            max_tokens=settings.TICKETPILOT_TOKEN_BUDGET,
+        ),
     )
 
 

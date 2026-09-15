@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import json
 import logging
@@ -56,6 +57,8 @@ from service.utils import (
 from ticketpilot.api import install_ticketpilot_api
 from ticketpilot.db import apply_migrations, get_ticketpilot_pool
 from ticketpilot.graph import build_ticketpilot_graph
+from ticketpilot.policies import DEFAULT_POLICY_MANIFEST_PATH
+from ticketpilot.retrieval import build_policy_retriever
 
 warnings.filterwarnings("ignore", category=LangChainBetaWarning)
 logger = logging.getLogger(__name__)
@@ -109,6 +112,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 await store.setup()
 
             if app.state.ticketpilot_pool is not None:
+                app.state.ticketpilot_retriever = await asyncio.to_thread(
+                    build_policy_retriever,
+                    DEFAULT_POLICY_MANIFEST_PATH.with_name("policy_v2_manifest.json"),
+                    settings.TICKETPILOT_RETRIEVAL_STRATEGY,
+                    settings.TICKETPILOT_MODEL_CACHE,
+                    settings.TICKETPILOT_MIN_SIMILARITY,
+                )
                 app.state.ticketpilot_graph = build_ticketpilot_graph(checkpointer=saver)
 
             if not settings.AUTH_SECRET:

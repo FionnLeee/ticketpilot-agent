@@ -1,0 +1,977 @@
+{
+  "dataset_id": "ticketpilot-retrieval-v1",
+  "frozen_at": "2026-09-15",
+  "note": "Author-generated diagnostic benchmark, not independently human-labelled. Split by policy family before retrieval experiments. Test is a held-out development split, not a third-party blind benchmark.",
+  "cases": [
+    {
+      "id": "return-q1",
+      "family": "return",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "买回来不喜欢了，收货第六天还能退吗？",
+      "relevant_ids": [
+        "return-01"
+      ],
+      "expected_fact": "普通商品签收后七天内可申请无理由退货，商品须保持完好。"
+    },
+    {
+      "id": "return-q2",
+      "family": "return",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "不是质量毛病，寄回去的快递费谁出？",
+      "relevant_ids": [
+        "return-03"
+      ],
+      "expected_fact": "无理由退货由买家承担寄回运费，质量问题按质量售后规则办理。"
+    },
+    {
+      "id": "return-q3",
+      "family": "return",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "仓库收到退货一般几天查验好？",
+      "relevant_ids": [
+        "return-05"
+      ],
+      "expected_fact": "退回仓库验收通常需要两个工作日，验收结果在工单中更新。"
+    },
+    {
+      "id": "return-q4",
+      "family": "return",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "为了看看货拆了外盒，是否直接不让退？",
+      "relevant_ids": [
+        "return-07"
+      ],
+      "expected_fact": "因验货而合理拆封不直接判定商品损坏，需结合商品类别核实。"
+    },
+    {
+      "id": "refund-q1",
+      "family": "refund",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "钱退回银行卡后一般多久能看见？",
+      "relevant_ids": [
+        "refund-01"
+      ],
+      "expected_fact": "退款成功执行后原路退回原支付账户，银行卡到账一般需要一至七个工作日。"
+    },
+    {
+      "id": "refund-q2",
+      "family": "refund",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "已经退过一部分，还能退的上限怎么算？",
+      "relevant_ids": [
+        "refund-03"
+      ],
+      "expected_fact": "部分退款金额不能大于订单当前可退余额，多次申请累计不得超出已支付金额。"
+    },
+    {
+      "id": "refund-q3",
+      "family": "refund",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "原来付款的卡已经注销怎么办？",
+      "relevant_ids": [
+        "refund-05"
+      ],
+      "expected_fact": "原支付账户注销或冻结时不得擅自更换收款账户，应转人工处理。"
+    },
+    {
+      "id": "refund-q4",
+      "family": "refund",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "退款显示成功但卡里没钱，可以再给我退一次吗？",
+      "relevant_ids": [
+        "refund-07"
+      ],
+      "expected_fact": "退款到账延迟需要提供支付渠道流水号核查，不能通过再次退款解决。"
+    },
+    {
+      "id": "shipping-q1",
+      "family": "shipping",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "现货付过钱后最晚什么时候从仓库出来？",
+      "relevant_ids": [
+        "shipping-01"
+      ],
+      "expected_fact": "现货订单付款后四十八小时内安排出库，预售商品遵循预售发货日期。"
+    },
+    {
+      "id": "shipping-q2",
+      "family": "shipping",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "一单怎么给了我两个运单号？",
+      "relevant_ids": [
+        "shipping-03"
+      ],
+      "expected_fact": "同一订单商品可能分包裹发出，每个包裹有独立物流单号。"
+    },
+    {
+      "id": "shipping-q3",
+      "family": "shipping",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "住在偏远县城也能按普通地区时间送到吗？",
+      "relevant_ids": [
+        "shipping-05"
+      ],
+      "expected_fact": "偏远地区配送时间另行展示，普通地区时效不能作为偏远地址的承诺。"
+    },
+    {
+      "id": "shipping-q4",
+      "family": "shipping",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "快递已经揽收了还能按没发货直接取消吗？",
+      "relevant_ids": [
+        "shipping-07"
+      ],
+      "expected_fact": "已交承运商的包裹不能按未发货订单直接取消，应先申请拦截。"
+    },
+    {
+      "id": "tracking-q1",
+      "family": "tracking",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "快递三天都没更新了怎么处理？",
+      "relevant_ids": [
+        "tracking-01"
+      ],
+      "expected_fact": "物流超过七十二小时无新轨迹时，可登记物流核查工单联系承运商。"
+    },
+    {
+      "id": "tracking-q2",
+      "family": "tracking",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "系统写收到了但我根本没拿到包裹怎么办？",
+      "relevant_ids": [
+        "tracking-03"
+      ],
+      "expected_fact": "物流标记签收但本人未收到时，应先核查代收人、驿站和签收凭证。"
+    },
+    {
+      "id": "tracking-q3",
+      "family": "tracking",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "外面的箱子压烂了我要留什么证据？",
+      "relevant_ids": [
+        "tracking-05"
+      ],
+      "expected_fact": "快递外箱破损时应拍摄外包装和商品照片，并保留面单申请核查。"
+    },
+    {
+      "id": "tracking-q4",
+      "family": "tracking",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "找不到快递就能直接认定丢件吗？",
+      "relevant_ids": [
+        "tracking-07"
+      ],
+      "expected_fact": "物流丢失须经承运商核实，确认前不得将推测写成已丢件结论。"
+    },
+    {
+      "id": "address-q1",
+      "family": "address",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "还没从仓库发出的单子可以换地址吗？",
+      "relevant_ids": [
+        "address-01"
+      ],
+      "expected_fact": "未出库订单可申请修改收货地址，由仓库确认是否修改成功。"
+    },
+    {
+      "id": "address-q2",
+      "family": "address",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "已经发走的快递改地址会多收钱吗？",
+      "relevant_ids": [
+        "address-03"
+      ],
+      "expected_fact": "包裹发出后改址需联系承运商，可能产生转寄运费和额外配送时间。"
+    },
+    {
+      "id": "address-q3",
+      "family": "address",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "跨境包裹寄出后能换一个国家收货吗？",
+      "relevant_ids": [
+        "address-05"
+      ],
+      "expected_fact": "跨境商品发货后不支持跨国家改址，可转人工核查退回方案。"
+    },
+    {
+      "id": "address-q4",
+      "family": "address",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "订单有两箱，改地址是不是只改一个就够了？",
+      "relevant_ids": [
+        "address-07"
+      ],
+      "expected_fact": "同一订单分多个包裹时，改址申请须逐个核实各包裹状态。"
+    },
+    {
+      "id": "exchange-q1",
+      "family": "exchange",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "鞋买小了，六天内能换个大一码的吗？",
+      "relevant_ids": [
+        "exchange-01"
+      ],
+      "expected_fact": "尺码不合适可在签收七天内申请同款换码，须符合商品完好条件。"
+    },
+    {
+      "id": "exchange-q2",
+      "family": "exchange",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "因为质量问题换新来回邮费谁承担？",
+      "relevant_ids": [
+        "exchange-03"
+      ],
+      "expected_fact": "质量问题换货经核实后由商家承担往返标准运费。"
+    },
+    {
+      "id": "exchange-q3",
+      "family": "exchange",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "我寄回去之后什么时候给我发新货？",
+      "relevant_ids": [
+        "exchange-05"
+      ],
+      "expected_fact": "换货收到退件并验收后安排补发，先行补发需要人工单独批准。"
+    },
+    {
+      "id": "exchange-q4",
+      "family": "exchange",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "想换成更贵的型号能直接换吗？",
+      "relevant_ids": [
+        "exchange-07"
+      ],
+      "expected_fact": "不同价格商品不能直接按同款换货处理，需先核定差价方案。"
+    },
+    {
+      "id": "warranty-q1",
+      "family": "warranty",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "电子设备的免费保修一般多长时间？",
+      "relevant_ids": [
+        "warranty-01"
+      ],
+      "expected_fact": "电子商品标准保修期为签收起十二个月，以订单交易凭证核实。"
+    },
+    {
+      "id": "warranty-q2",
+      "family": "warranty",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "自己拆过机又进水还能免费修吗？",
+      "relevant_ids": [
+        "warranty-03"
+      ],
+      "expected_fact": "进液、跌落及未经授权拆机造成的损坏不属于免费保修范围。"
+    },
+    {
+      "id": "warranty-q3",
+      "family": "warranty",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "送去保修后多久能出检测结论？",
+      "relevant_ids": [
+        "warranty-05"
+      ],
+      "expected_fact": "保修检测一般在收件后五个工作日内给出结论，缺配件时另行通知。"
+    },
+    {
+      "id": "warranty-q4",
+      "family": "warranty",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "维修前手机里的资料要不要自己备份？",
+      "relevant_ids": [
+        "warranty-07"
+      ],
+      "expected_fact": "维修前客户应备份个人数据，维修流程可能恢复出厂设置。"
+    },
+    {
+      "id": "invoice-q1",
+      "family": "invoice",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "用券后开发票是写原价还是实付的钱？",
+      "relevant_ids": [
+        "invoice-01"
+      ],
+      "expected_fact": "订单支付完成后可申请电子普通发票，开票金额以实际支付金额为准。"
+    },
+    {
+      "id": "invoice-q2",
+      "family": "invoice",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "发票税号填错了怎么重新开？",
+      "relevant_ids": [
+        "invoice-03"
+      ],
+      "expected_fact": "发票抬头或税号错误时需要先红冲原票再重新开具。"
+    },
+    {
+      "id": "invoice-q3",
+      "family": "invoice",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "开好的电子票从哪里下载？",
+      "relevant_ids": [
+        "invoice-05"
+      ],
+      "expected_fact": "电子发票开具后可在订单页面下载，也可发送至客户提供的邮箱。"
+    },
+    {
+      "id": "invoice-q4",
+      "family": "invoice",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "想要专票是不是所有订单都能开？",
+      "relevant_ids": [
+        "invoice-07"
+      ],
+      "expected_fact": "增值税专用发票需核实购买主体资质和商品适用范围。"
+    },
+    {
+      "id": "coupon-q1",
+      "family": "coupon",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "券昨天过期了能直接延长一天吗？",
+      "relevant_ids": [
+        "coupon-01"
+      ],
+      "expected_fact": "优惠券须在有效期内使用，过期优惠券不能直接延长有效期。"
+    },
+    {
+      "id": "coupon-q2",
+      "family": "coupon",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "没付款就取消了优惠券还回来吗？",
+      "relevant_ids": [
+        "coupon-03"
+      ],
+      "expected_fact": "未支付订单取消后优惠券可按券规则退回，已过有效期的券不恢复。"
+    },
+    {
+      "id": "coupon-q3",
+      "family": "coupon",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "加上快递费才够满减门槛可以用券吗？",
+      "relevant_ids": [
+        "coupon-05"
+      ],
+      "expected_fact": "优惠券达到满减门槛才可使用，运费通常不计入商品满减金额。"
+    },
+    {
+      "id": "coupon-q4",
+      "family": "coupon",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "券不用了能换成现金或者给朋友吗？",
+      "relevant_ids": [
+        "coupon-07"
+      ],
+      "expected_fact": "优惠券不能转为现金，也不能转移到其他客户账户。"
+    },
+    {
+      "id": "points-q1",
+      "family": "points",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "刚付款为什么没收到购物积分？",
+      "relevant_ids": [
+        "points-01"
+      ],
+      "expected_fact": "购物积分在订单确认收货后发放，未完成订单不会提前发放。"
+    },
+    {
+      "id": "points-q2",
+      "family": "points",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "订单退了一半，送的积分会扣掉吗？",
+      "relevant_ids": [
+        "points-03"
+      ],
+      "expected_fact": "已获得积分的订单退款时，相应积分需按实际退货比例扣回。"
+    },
+    {
+      "id": "points-q3",
+      "family": "points",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "积分可以拿来抵快递费吗？",
+      "relevant_ids": [
+        "points-05"
+      ],
+      "expected_fact": "积分抵扣比例以结算页面为准，不能用于抵扣独立运费。"
+    },
+    {
+      "id": "points-q4",
+      "family": "points",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "两个账号的积分可以凑在一起吗？",
+      "relevant_ids": [
+        "points-07"
+      ],
+      "expected_fact": "不同客户账户的积分不能合并，也不能直接转赠。"
+    },
+    {
+      "id": "presale-q1",
+      "family": "presale",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "预售也必须付款后两天内发货吗？",
+      "relevant_ids": [
+        "presale-01"
+      ],
+      "expected_fact": "预售发货日期以商品预售页面约定为准，不适用现货四十八小时出库规则。"
+    },
+    {
+      "id": "presale-q2",
+      "family": "presale",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "预售的定金是不是一定能退？",
+      "relevant_ids": [
+        "presale-03"
+      ],
+      "expected_fact": "预售定金是否可退需核查具体活动条款，客服不得统一承诺可退。"
+    },
+    {
+      "id": "presale-q3",
+      "family": "presale",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "预售送的小礼品跟主商品一起寄吗？",
+      "relevant_ids": [
+        "presale-05"
+      ],
+      "expected_fact": "预售赠品随主商品或另包裹发出，具体安排以活动说明为准。"
+    },
+    {
+      "id": "presale-q4",
+      "family": "presale",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "预售还没做出来可以给个真实运单吗？",
+      "relevant_ids": [
+        "presale-07"
+      ],
+      "expected_fact": "预售商品尚未交付时不能将预估物流写成真实运单记录。"
+    },
+    {
+      "id": "custom-q1",
+      "family": "custom",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "刻了名字的礼物不喜欢了能七天无理由退吗？",
+      "relevant_ids": [
+        "custom-01"
+      ],
+      "expected_fact": "刻字或按客户尺寸制作的定制商品，不适用普通商品无理由退货。"
+    },
+    {
+      "id": "custom-q2",
+      "family": "custom",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "定制品已经开始做了还能改尺寸吗？",
+      "relevant_ids": [
+        "custom-03"
+      ],
+      "expected_fact": "定制内容在生产前可申请修改，进入生产后需人工核实成本和可行性。"
+    },
+    {
+      "id": "custom-q3",
+      "family": "custom",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "厂家刻的字和我确认稿不一样怎么办？",
+      "relevant_ids": [
+        "custom-05"
+      ],
+      "expected_fact": "商家制作内容与客户确认稿不一致时，由商家核查重做或退款方案。"
+    },
+    {
+      "id": "custom-q4",
+      "family": "custom",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "定制商品取消是不是马上全额退钱？",
+      "relevant_ids": [
+        "custom-07"
+      ],
+      "expected_fact": "定制商品取消申请应记录生产阶段，不直接承诺全额退款。"
+    },
+    {
+      "id": "fresh-q1",
+      "family": "fresh",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "买的水果不想吃了适用七天无理由吗？",
+      "relevant_ids": [
+        "fresh-01"
+      ],
+      "expected_fact": "生鲜食品不适用普通商品无理由退货，质量异常按食品售后流程核查。"
+    },
+    {
+      "id": "fresh-q2",
+      "family": "fresh",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "冷链东西送到都化了要记录什么？",
+      "relevant_ids": [
+        "fresh-03"
+      ],
+      "expected_fact": "冷链商品失温应记录温度异常及签收时间，转人工判断处理方案。"
+    },
+    {
+      "id": "fresh-q3",
+      "family": "fresh",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "怀疑水果缺斤少两要提供什么凭证？",
+      "relevant_ids": [
+        "fresh-05"
+      ],
+      "expected_fact": "缺斤少两应提供完整称重照片和订单规格，不能只凭口头估计认定。"
+    },
+    {
+      "id": "fresh-q4",
+      "family": "fresh",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "食品有怪味还能继续吃着等客服回复吗？",
+      "relevant_ids": [
+        "fresh-07"
+      ],
+      "expected_fact": "食品出现异味或安全疑虑时应停止食用并保留包装，联系人工售后。"
+    },
+    {
+      "id": "digital-q1",
+      "family": "digital",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "没点开也没激活的兑换码可以申请退款吗？",
+      "relevant_ids": [
+        "digital-01"
+      ],
+      "expected_fact": "数字兑换码未查看且未激活时可提交退款核查申请。"
+    },
+    {
+      "id": "digital-q2",
+      "family": "digital",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "兑换码说已经用过了能立即再给我一个吗？",
+      "relevant_ids": [
+        "digital-03"
+      ],
+      "expected_fact": "兑换码提示已被使用时需核查激活记录，不能直接再次发码。"
+    },
+    {
+      "id": "digital-q3",
+      "family": "digital",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "付了钱但没有看到数字激活码怎么办？",
+      "relevant_ids": [
+        "digital-05"
+      ],
+      "expected_fact": "数字商品付款后未收到兑换码，应核对站内消息和订单交付状态。"
+    },
+    {
+      "id": "digital-q4",
+      "family": "digital",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "国外买的授权一定能在国内激活吗？",
+      "relevant_ids": [
+        "digital-07"
+      ],
+      "expected_fact": "数字商品适用设备和区域以商品说明为准，不保证跨区激活。"
+    },
+    {
+      "id": "price-q1",
+      "family": "price",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "收货五天后同款降价了能补差吗？",
+      "relevant_ids": [
+        "price-01"
+      ],
+      "expected_fact": "参与价保的商品签收七天内出现同款同渠道降价，可申请价保核查。"
+    },
+    {
+      "id": "price-q2",
+      "family": "price",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "别人用会员专属券更便宜也能拿来申请价保吗？",
+      "relevant_ids": [
+        "price-03"
+      ],
+      "expected_fact": "价保比较实际成交条件，会员专享券与公开价格不能直接混比。"
+    },
+    {
+      "id": "price-q3",
+      "family": "price",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "同一次降价重复提交能再补一笔差价吗？",
+      "relevant_ids": [
+        "price-05"
+      ],
+      "expected_fact": "同一降价事件重复申请价保不重复补差，已补金额计入记录。"
+    },
+    {
+      "id": "price-q4",
+      "family": "price",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "七天后才发现降价还能保证价保吗？",
+      "relevant_ids": [
+        "price-07"
+      ],
+      "expected_fact": "价保申请超出时限时转人工核查活动特例，不承诺必定补差。"
+    },
+    {
+      "id": "gift-q1",
+      "family": "gift",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "整单退掉小赠品也要一起寄回吗？",
+      "relevant_ids": [
+        "gift-01"
+      ],
+      "expected_fact": "整单退货时活动赠品通常需要一并退回，具体以活动条款为准。"
+    },
+    {
+      "id": "gift-q2",
+      "family": "gift",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "赠品没到就可以直接认定漏发吗？",
+      "relevant_ids": [
+        "gift-03"
+      ],
+      "expected_fact": "赠品未随主商品送达时先核对是否分包裹发货，再登记漏发。"
+    },
+    {
+      "id": "gift-q3",
+      "family": "gift",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "退掉一件后不够满赠门槛了赠品怎么处理？",
+      "relevant_ids": [
+        "gift-05"
+      ],
+      "expected_fact": "购买部分商品触发的满赠，在部分退款后需重新判断是否满足门槛。"
+    },
+    {
+      "id": "gift-q4",
+      "family": "gift",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "赠品没库存可以不问我就换另一种吗？",
+      "relevant_ids": [
+        "gift-07"
+      ],
+      "expected_fact": "活动赠品库存不足的替代方案须取得客户同意。"
+    },
+    {
+      "id": "payment-q1",
+      "family": "payment",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "银行卡扣钱了订单还写未付款，要再付一次吗？",
+      "relevant_ids": [
+        "payment-01"
+      ],
+      "expected_fact": "银行显示扣款但订单未支付时，应核查支付回调和交易流水，不要求立即重复付款。"
+    },
+    {
+      "id": "payment-q2",
+      "family": "payment",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "付款失败后活动价能一直给我保留吗？",
+      "relevant_ids": [
+        "payment-03"
+      ],
+      "expected_fact": "付款失败后优惠资格按活动时限判断，不保证永久保留活动价格。"
+    },
+    {
+      "id": "payment-q3",
+      "family": "payment",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "分期买的东西退了，手续费也一定全退吗？",
+      "relevant_ids": [
+        "payment-05"
+      ],
+      "expected_fact": "分期订单退款后剩余分期和手续费由支付机构按其规则处理。"
+    },
+    {
+      "id": "payment-q4",
+      "family": "payment",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "关单之后银行才扣成功这笔钱怎么处理？",
+      "relevant_ids": [
+        "payment-07"
+      ],
+      "expected_fact": "订单关闭后到账的款项需核对关单时间与渠道状态再处理。"
+    },
+    {
+      "id": "package-q1",
+      "family": "package",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "收到的型号和我下单的型号不一样怎么办？",
+      "relevant_ids": [
+        "package-01"
+      ],
+      "expected_fact": "收到商品与订单型号不符时，拍摄商品标签与订单信息申请错发核查。"
+    },
+    {
+      "id": "package-q2",
+      "family": "package",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "箱子里少了充电器要提供什么证据？",
+      "relevant_ids": [
+        "package-03"
+      ],
+      "expected_fact": "少发配件应拍摄全部开箱物品及包装清单，核实后补寄缺失部分。"
+    },
+    {
+      "id": "package-q3",
+      "family": "package",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "补寄的东西能单独查物流吗？",
+      "relevant_ids": [
+        "package-05"
+      ],
+      "expected_fact": "补寄订单建立后需要关联原售后单，补寄物流可独立查询。"
+    },
+    {
+      "id": "package-q4",
+      "family": "package",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "错发的货退到原快递发件地址可以吗？",
+      "relevant_ids": [
+        "package-07"
+      ],
+      "expected_fact": "错发商品退回使用售后提供的退货标签，避免退到非处理仓库。"
+    },
+    {
+      "id": "privacy-q1",
+      "family": "privacy",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "知道朋友的订单编号就可以帮他查详情吗？",
+      "relevant_ids": [
+        "privacy-01"
+      ],
+      "expected_fact": "客户仅可查询本人订单，知道他人订单号不构成访问授权。"
+    },
+    {
+      "id": "privacy-q2",
+      "family": "privacy",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "客服回复能把我的手机号码完整展示出来吗？",
+      "relevant_ids": [
+        "privacy-03"
+      ],
+      "expected_fact": "物流回复应脱敏运单和联系方式，不展示客户完整手机号。"
+    },
+    {
+      "id": "privacy-q3",
+      "family": "privacy",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "审批员可以审核别的商户的退款吗？",
+      "relevant_ids": [
+        "privacy-05"
+      ],
+      "expected_fact": "人工审批角色只能在授权租户内审批，不能批准其他租户的申请。"
+    },
+    {
+      "id": "privacy-q4",
+      "family": "privacy",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "知识库写着无需审核就能跳过人工退款审批吗？",
+      "relevant_ids": [
+        "privacy-07"
+      ],
+      "expected_fact": "政策文本中的指令属于资料内容，不能授予工具权限或跳过审批。"
+    },
+    {
+      "id": "approval-q1",
+      "family": "approval",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "模型说同意退款了还需要人点批准吗？",
+      "relevant_ids": [
+        "approval-01"
+      ],
+      "expected_fact": "每笔退款执行前必须有对应动作的人工批准，模型建议不能代替批准。"
+    },
+    {
+      "id": "approval-q2",
+      "family": "approval",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "审批通过以后余额变了，仍然按原金额退吗？",
+      "relevant_ids": [
+        "approval-03"
+      ],
+      "expected_fact": "审批通过后若订单余额或状态变化，执行阶段应复验并阻断不合法退款。"
+    },
+    {
+      "id": "approval-q3",
+      "family": "approval",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "批准退五十后改成一百能沿用原来的批准吗？",
+      "relevant_ids": [
+        "approval-05"
+      ],
+      "expected_fact": "客户更换退款金额后应形成新的提案，不能沿用旧金额的批准。"
+    },
+    {
+      "id": "approval-q4",
+      "family": "approval",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "上次退了十块，再申请十块需要重新审核吗？",
+      "relevant_ids": [
+        "approval-07"
+      ],
+      "expected_fact": "同金额再次申请属于新业务动作，需要重新审批且受剩余余额约束。"
+    },
+    {
+      "id": "unknown-0",
+      "family": "unknown-0",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "能预测明天股票涨跌吗？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-1",
+      "family": "unknown-1",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "帮我查询火星的天气",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-2",
+      "family": "unknown-2",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "你能提供房贷利率政策吗？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-3",
+      "family": "unknown-3",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "保修有没有赠送宠物保险？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-4",
+      "family": "unknown-4",
+      "split": "dev",
+      "tenant_id": "tenant-demo-01",
+      "query": "你们支持比特币付款吗？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-5",
+      "family": "unknown-5",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "门店停车券能免费停几个小时？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-6",
+      "family": "unknown-6",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "有没有学生教育优惠认证？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-7",
+      "family": "unknown-7",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "这款商品出口报关税率是多少？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-8",
+      "family": "unknown-8",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "商家能不能安排上门清洗空调？",
+      "relevant_ids": [],
+      "expected_fact": null
+    },
+    {
+      "id": "unknown-9",
+      "family": "unknown-9",
+      "split": "test",
+      "tenant_id": "tenant-demo-01",
+      "query": "购买商品会获得航空里程吗？",
+      "relevant_ids": [],
+      "expected_fact": null
+    }
+  ]
+}

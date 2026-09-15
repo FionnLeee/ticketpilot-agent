@@ -55,6 +55,8 @@ class Citation(TicketPilotModel):
     uri: HttpUrl | None = None
     chunk_id: str | None = Field(default=None, max_length=256)
     excerpt: str | None = Field(default=None, max_length=1500)
+    policy_version: str | None = None
+    effective_at: str | None = None
 
 
 class OrderSummary(TicketPilotModel):

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -6,9 +7,16 @@ from uuid import UUID, uuid4
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-from ticketpilot.domain import PrincipalRole
+from ticketpilot.domain import PrincipalRole, ProcessingResult
 from ticketpilot.errors import Forbidden, ResourceNotFound, TicketPilotUnavailable
 from ticketpilot.graph import TicketGraphContext
+from ticketpilot.observability import (
+    ExecutionLimitExceeded,
+    ExecutionLimits,
+    ModelCallFailed,
+    RunTelemetry,
+    current_run,
+)
 from ticketpilot.orders import OrderReader
 from ticketpilot.paths import find_ancestor_path
 from ticketpilot.policies import PolicyRetriever
@@ -59,6 +67,7 @@ class TicketService:
         order_reader: OrderReader | None = None,
         policy_retriever: PolicyRetriever | None = None,
         reasoner: TicketReasoner | None = None,
+        execution_limits: ExecutionLimits | None = None,
     ) -> None:
         self.repository = repository
         self.workflow = workflow
@@ -66,6 +75,7 @@ class TicketService:
         self.order_reader = order_reader
         self.policy_retriever = policy_retriever
         self.reasoner = reasoner
+        self.execution_limits = execution_limits or ExecutionLimits()
 
     async def _invoke_owned(
         self,
@@ -80,11 +90,21 @@ class TicketService:
         if workflow is None:
             raise TicketPilotUnavailable
         await self.repository.claim_run(principal.tenant_id, ticket_id, run_id)
+        telemetry = RunTelemetry(str(run_id), self.execution_limits)
+        token = current_run.set(telemetry)
         try:
-            await workflow.ainvoke(
-                graph_input,
-                config=RunnableConfig(configurable={"thread_id": thread_id}),
-                context=context,
+            async with asyncio.timeout(self.execution_limits.deadline_seconds):
+                await workflow.ainvoke(
+                    graph_input,
+                    config=RunnableConfig(configurable={"thread_id": thread_id}),
+                    context=context,
+                )
+            return await self._run_result(principal, ticket_id, run_id)
+        except (ModelCallFailed, ExecutionLimitExceeded) as exc:
+            await context.workflow_repository.record_unsuccessful_result(
+                principal.tenant_id, ticket_id, run_id,
+                "模型服务暂时不可用或本轮执行预算已用尽，请稍后重新提交或转人工核查。",
+                ProcessingResult.DEPENDENCY_FAILED, type(exc).__name__,
             )
             return await self._run_result(principal, ticket_id, run_id)
         except BaseException as exc:
@@ -96,7 +116,14 @@ class TicketService:
             )
             raise
         finally:
-            await self.repository.release_run(principal.tenant_id, ticket_id, run_id)
+            current_run.reset(token)
+            try:
+                await context.workflow_repository.record_runtime_events(
+                    principal.tenant_id, ticket_id, run_id,
+                    telemetry.events, telemetry.summary(),
+                )
+            finally:
+                await self.repository.release_run(principal.tenant_id, ticket_id, run_id)
 
     async def create_ticket(
         self,

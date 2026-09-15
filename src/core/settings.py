@@ -1,6 +1,6 @@
 from enum import StrEnum
 from json import loads
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from dotenv import find_dotenv
 from pydantic import (
@@ -143,6 +143,13 @@ class Settings(BaseSettings):
     TICKETPILOT_ENABLED: bool = False
     TICKETPILOT_AUTH_TOKENS: dict[str, dict[str, str]] = Field(default_factory=dict)
     TICKETPILOT_REASONER_MODE: TicketPilotReasonerMode = TicketPilotReasonerMode.LLM
+    TICKETPILOT_RETRIEVAL_STRATEGY: Literal["keyword", "bm25", "dense", "hybrid", "rerank"] = "bm25"
+    TICKETPILOT_MODEL_CACHE: str | None = None
+    TICKETPILOT_MIN_SIMILARITY: float = Field(default=0.50, ge=0, le=1)
+    TICKETPILOT_RUN_DEADLINE: float = Field(default=120, gt=0, le=600)
+    TICKETPILOT_CALL_TIMEOUT: float = Field(default=45, gt=0, le=120)
+    TICKETPILOT_MAX_MODEL_CALLS: int = Field(default=6, ge=1, le=20)
+    TICKETPILOT_TOKEN_BUDGET: int = Field(default=16000, ge=2000, le=100000)
 
     # MongoDB Configuration
     MONGO_HOST: str | None = None
