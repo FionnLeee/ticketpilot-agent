@@ -1,0 +1,9 @@
+{
+  "dataset_id": "ticketpilot-scale-policy-v1",
+  "corpus_path": "policies/scale_policy_v1.json",
+  "corpus_sha256": "57411f615fcaa3c56a8d78c146631d56fa62efe31d257b50ee2c4c94d5fde153",
+  "chunk_count": 24,
+  "effective_at": "2026-09-15T00:00:00+00:00",
+  "provenance": "First-party synthetic policies for scale demonstration; not legal advice or real merchant policy.",
+  "contains_real_personal_data": false
+}

@@ -111,6 +111,12 @@ sequenceDiagram
 
 明确不宣称：跨真实支付系统的 exactly-once（当前退款是 Mock，真实支付需要支付方幂等键、Outbox 与对账）；进程被强杀后的自动接管（已认领的 run 需要后续恢复机制）。
 
+## 合成数据规模与小并发验证
+
+新增独立规模演示：**10,000 笔合成订单、10 租户、1,000 个客户、24 个政策片段**，固定 seed 可复现；12 类业务场景在 10 租户下共 120 次工作流验证。原演示数据与默认政策保持不变，扩展版本由规模脚本使用。
+
+本机进程内 Service + LangGraph + PostgreSQL 测试，1/10/30 并发各 100 次查询均通过；30 次同请求只有一个 ticket/run，30 次同审批仅扣减一次 Mock 金额。**不含 HTTP 或真实模型，不代表生产 QPS。** 数据覆盖、P95、复跑命令与扩展取舍见 [规模演示说明](docs/SCALE_DEMO.md)。
+
 ## 真实模型评测（M2）
 
 `scripts/evaluate_ticketpilot_classification.py` 对真实 `LangChainTicketReasoner` 的意图分类与字段抽取做可复现评测：四个字段（意图、订单号、明确金额、全额标志）全对才算整条正确，记录模型、temperature、数据与代码哈希、逐条输出与耗时。

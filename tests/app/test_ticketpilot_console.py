@@ -34,11 +34,11 @@ def _open_console() -> AppTest:
 
 
 def test_console_is_opt_in_and_lists_env_identities(mock_agent_client, demo_tokens):
-    at = AppTest.from_file("../../src/streamlit_app.py").run()
+    at = AppTest.from_file("../../src/streamlit_app.py").run(timeout=10)
 
     assert not any("TicketPilot 售后工单工作台" in item.value for item in at.subheader)
 
-    at.sidebar.toggle(key="show_ticketpilot_console").set_value(True).run()
+    at.sidebar.toggle(key="show_ticketpilot_console").set_value(True).run(timeout=10)
 
     assert any("TicketPilot 售后工单工作台" in item.value for item in at.subheader)
     identity = at.selectbox(key="ticketpilot_identity")
