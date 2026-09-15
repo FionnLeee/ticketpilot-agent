@@ -51,7 +51,7 @@ README、演示、简历和面试表述都应遵守这条边界，不能把上�
 | Streamlit | 通用聊天 UI、Agent/模型选择、历史会话和语音入口 | 已稳定 Windows UI 测试，并新增默认关闭的工单状态、审批和审计控制台 | 保持本地演示定位，不扩成生产客服门户 |
 | Observability | LangSmith/Langfuse 可选集成和 feedback 接口 | 已新增 tenant 范围 run event API、Tool 结果/近似耗时和审批重放事件 | 后续补模型耗时、成本、分页、聚合指标和告警 |
 | Docker | PostgreSQL、FastAPI、Streamlit 的 Compose 编排和健康检查 | 已完成 Docker 数据迁移与本地 baseline 验证 | 复用当前编排，只添加 TicketPilot 必需的初始化或迁移步骤 |
-| Tests | Agent、Schema、Service、Client、UI 和 Docker E2E 测试基础 | 修复 1 个 Windows 测试问题；baseline 为 `190 passed, 4 skipped`。现已新增 API 契约、隔离、仓储、并发归属、退款语义、graph、评测器和工作台测试；2026-09-15 默认全量 `288 passed, 39 skipped`，PostgreSQL 专项 `105 passed` | 独立封存评测集与端到端评测 |
+| Tests | Agent、Schema、Service、Client、UI 和 Docker E2E 测试基础 | 修复 1 个 Windows 测试问题；baseline 为 `190 passed, 4 skipped`。现已新增 API 契约、隔离、仓储、并发归属、退款语义、graph、评测器、工作台与历史数据测试；2026-09-15 默认全量 `295 passed, 39 skipped`，PostgreSQL 专项 `112 passed` | 独立封存评测集与端到端评测 |
 
 ## 4. 上游代码证据
 
@@ -224,5 +224,16 @@ MVP 需要新增：
 - `/info` 暴露 `ticketpilot_reasoner_mode`，界面据此说明当前是真实模型还是确定性演示；
 - Streamlit 工作台：身份切换与后端令牌校验、演示场景按钮、聊天视图与政策引用、自动生成的 `Idempotency-Key` 与同 key 重试对照、按角色门控的审批卡、中文审计时间线、开发者详情；
 - `scripts/ticketpilot_ui_e2e.py`：Playwright 驱动工作台走完整黄金链路并断言业务结果，同时生成 `media/ticketpilot/` 截图和可选录像。
+
+## 15. 百万级关系数据与数据工程增量
+
+- `history_manifest.json`：12 租户、730 天、1,000,000 订单的确定性参数、许可与无真实个人数据声明；
+- `history_data.py`：按订单流式构建工单、消息、审批和审计时间线，固定 seed/UUID，加入租户差异、季节性和业务状态约束；
+- `history_loader.py`：外键有序 PostgreSQL `COPY`、分批短事务、数据集注册与指纹、重跑跳过和部分装载续传；
+- `history_quality.py`：21 条跨表质量规则、合成/真实运行来源隔离、六个业务分析视图快照；
+- `0007`/`0008`：客户最近工单索引、数据集 registry、来源投影和分析视图；
+- `ticketpilot_history_data.py`：统一生成、装载、质量、视图耗时、存储与 `EXPLAIN ANALYZE` 证据报告。
+
+实测为 1,000,000 订单、3,246,760 关联行，装载 196.360 秒，21/21 质量检查通过。以上是第一方合成历史与本地 PostgreSQL 证据，不代表真实用户、百万次 LLM 推理或生产吞吐。详见 [`HISTORY_DATASET.md`](HISTORY_DATASET.md)。
 
 截至 2026-09-15，仍未完成且对外必须保留的边界：真实支付与跨系统 exactly-once、进程强杀后的自动接管、TicketPilot 专用 SSE、独立封存评测集与端到端评测、生产级身份系统。

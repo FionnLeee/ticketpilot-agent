@@ -91,7 +91,7 @@ sequenceDiagram
 | --- | --- | --- |
 | 服务框架 | FastAPI 服务、通用 Agent 注册、SSE、Streamlit 聊天 UI、Docker Compose | `TICKETPILOT_ENABLED` 专用模式：只挂载 `/v1` 业务 API、`/info`、`/health`，通用入口返回 404 |
 | 工作流 | LangGraph `interrupt()` / `Command(resume)` 示例、PostgreSQL checkpointer | 工单专用 graph：意图分类、订单/政策 Tool、风险路由、退款审批暂停与恢复、结果语义 |
-| 持久化 | checkpoint 与 store 接入 | 独立业务连接池、6 个版本化迁移、工单/消息/订单/审批/审计五张业务表、约束与唯一索引 |
+| 持久化 | checkpoint 与 store 接入 | 独立业务连接池、8 个版本化迁移、五张业务表、约束/唯一索引，以及百万级历史的流式 `COPY` 与质量校验 |
 | 身份 | 可选 Bearer 校验 | `TICKETPILOT_AUTH_TOKENS` → `RequestPrincipal`；资源归属下推到 SQL；角色权限 |
 | 可靠性 | — | 创建/消息请求幂等、退款动作幂等、active run 归属、审批重放、执行前复验 |
 | 评测 | — | 18 + 6 条合成中文分类样本、确定性评分器、可复现的真实模型评测脚本 |
@@ -111,9 +111,11 @@ sequenceDiagram
 
 明确不宣称：跨真实支付系统的 exactly-once（当前退款是 Mock，真实支付需要支付方幂等键、Outbox 与对账）；进程被强杀后的自动接管（已认领的 run 需要后续恢复机制）。
 
-## 合成数据规模与小并发验证
+## 百万级合成历史与小并发验证
 
-新增独立规模演示：**10,000 笔合成订单、10 租户、1,000 个客户、24 个政策片段**，固定 seed 可复现；12 类业务场景在 10 租户下共 120 次工作流验证。原演示数据与默认政策保持不变，扩展版本由规模脚本使用。
+默认历史 manifest 已在 PostgreSQL 16 实际落库：**1,000,000 订单、235,924 工单、478,813 消息、56,127 审批、1,475,896 审计事件，共 3,246,760 行**，覆盖 12 租户与 730 天。生成器按 20,000 订单流式分批、按外键顺序 `COPY`，196.360 秒完成装载；21 条跨表质量规则全部通过。数据集指纹支持幂等重跑，第二次装载阶段 0.560 秒识别并跳过，行数不增加；一组真实索引查询实际走 `Index Scan`。
+
+另有可执行规模演示：10,000 笔合成订单、10 租户、1,000 个客户、24 个政策片段；12 类业务场景在 10 租户下共 120 次工作流验证。预生成历史以 `SYNTHETIC_HISTORY` 标识，与真实 Service/LangGraph 运行产生的 `LIVE_RUN` 分开统计。详细数据契约、复跑命令、分析视图、耗时与限制见[百万级历史说明](docs/HISTORY_DATASET.md)。
 
 本机进程内 Service + LangGraph + PostgreSQL 测试，1/10/30 并发各 100 次查询均通过；30 次同请求只有一个 ticket/run，30 次同审批仅扣减一次 Mock 金额。**不含 HTTP 或真实模型，不代表生产 QPS。** 数据覆盖、P95、复跑命令与扩展取舍见 [规模演示说明](docs/SCALE_DEMO.md)。
 
@@ -169,7 +171,7 @@ uv run pytest tests/ticketpilot --run-docker   # 需要 compose 里的 PostgreSQ
 uv run ruff check src tests scripts
 ```
 
-2026-09-15 在 Windows 11 / Python 3.12 上的结果：默认全量 `288 passed, 39 skipped`；PostgreSQL 专项 `105 passed`（其中 35 个用例只在 `--run-docker` 下运行）；服务隔离专项 8 passed；浏览器黄金链路 8 步全部通过（约 55 秒）。数字来自不同测试集合，不能相加。
+2026-09-15 在 Windows 11 / Python 3.12 上的结果：默认全量 `295 passed, 39 skipped`；PostgreSQL 专项 `112 passed`；服务隔离专项 8 passed；浏览器黄金链路 8 步全部通过（约 55 秒）。数字来自有重叠的不同测试集合，不能相加。
 
 ## 目录
 
@@ -177,9 +179,9 @@ uv run ruff check src tests scripts
 src/ticketpilot/            业务代码：api / services / repositories / workflow_repository / graph / tools / reasoning / schemas / domain
 src/ticketpilot_streamlit.py 演示工作台
 src/client/ticketpilot.py   业务 API 客户端
-migrations/ticketpilot/     0001–0006 版本化 SQL 迁移
-data/ticketpilot/           合成订单 manifest、合成政策语料、分类评测集
-scripts/                    ticketpilot_demo.py（API 验收）、ticketpilot_ui_e2e.py（浏览器验收）、evaluate_ticketpilot_classification.py
+migrations/ticketpilot/     0001–0008 版本化 SQL 迁移
+data/ticketpilot/           合成订单/历史 manifest、政策语料、分类评测集
+scripts/                    API/浏览器验收、百万历史装载、规模并发与真实模型评测脚本
 tests/ticketpilot/          API、隔离、仓储、并发归属、退款语义、graph、评测器测试
 docs/                       ARCHITECTURE、CONTRIBUTION_MAP、DATASET_STRATEGY、TICKETPILOT_DEMO、adr/
 ```
@@ -190,6 +192,7 @@ docs/                       ARCHITECTURE、CONTRIBUTION_MAP、DATASET_STRATEGY�
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：架构原则、状态机、数据模型、审批与恢复设计
 - [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md)：上游能力 / 个人贡献 / 明确不做
 - [`docs/DATASET_STRATEGY.md`](docs/DATASET_STRATEGY.md)：合成数据来源与许可
+- [`docs/HISTORY_DATASET.md`](docs/HISTORY_DATASET.md)：百万级关系数据、装载、质量规则与分析视图
 - [`docs/adr/0001-ticketpilot-scope.md`](docs/adr/0001-ticketpilot-scope.md)：范围决策记录
 - [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md)：评测契约与实验记录
 

@@ -1,0 +1,29 @@
+{
+  "dataset_id": "ticketpilot-history-v1",
+  "schema_version": 1,
+  "generator_module": "ticketpilot.history_data",
+  "generator_version": 1,
+  "generator_seed": 20260915,
+  "base_time": "2026-09-15T00:00:00+00:00",
+  "history_days": 730,
+  "order_count": 1000000,
+  "tenant_prefix": "tenant-hist-",
+  "tenants": [
+    {"code": "01", "weight": 0.22, "ticket_rate": 0.17, "refund_share": 0.34, "orders_per_customer": 7.5, "carriers": ["SF Express", "JD Logistics", "YTO Express"]},
+    {"code": "02", "weight": 0.16, "ticket_rate": 0.13, "refund_share": 0.26, "orders_per_customer": 6.0, "carriers": ["ZTO Express", "YTO Express", "STO Express"]},
+    {"code": "03", "weight": 0.13, "ticket_rate": 0.24, "refund_share": 0.42, "orders_per_customer": 5.0, "carriers": ["SF Express", "Cainiao"]},
+    {"code": "04", "weight": 0.10, "ticket_rate": 0.15, "refund_share": 0.30, "orders_per_customer": 8.0, "carriers": ["JD Logistics"]},
+    {"code": "05", "weight": 0.08, "ticket_rate": 0.19, "refund_share": 0.36, "orders_per_customer": 4.5, "carriers": ["ZTO Express", "Cainiao", "YTO Express"]},
+    {"code": "06", "weight": 0.07, "ticket_rate": 0.12, "refund_share": 0.22, "orders_per_customer": 9.0, "carriers": ["SF Express", "JD Logistics"]},
+    {"code": "07", "weight": 0.06, "ticket_rate": 0.28, "refund_share": 0.45, "orders_per_customer": 3.5, "carriers": ["STO Express", "ZTO Express"]},
+    {"code": "08", "weight": 0.05, "ticket_rate": 0.16, "refund_share": 0.31, "orders_per_customer": 6.5, "carriers": ["YTO Express", "Cainiao"]},
+    {"code": "09", "weight": 0.04, "ticket_rate": 0.21, "refund_share": 0.38, "orders_per_customer": 5.5, "carriers": ["SF Express"]},
+    {"code": "10", "weight": 0.035, "ticket_rate": 0.14, "refund_share": 0.25, "orders_per_customer": 7.0, "carriers": ["JD Logistics", "ZTO Express"]},
+    {"code": "11", "weight": 0.03, "ticket_rate": 0.32, "refund_share": 0.48, "orders_per_customer": 3.0, "carriers": ["STO Express", "Cainiao", "YTO Express"]},
+    {"code": "12", "weight": 0.025, "ticket_rate": 0.18, "refund_share": 0.33, "orders_per_customer": 6.0, "carriers": ["SF Express", "ZTO Express"]}
+  ],
+  "policy_manifest": "scale_policy_manifest.json",
+  "contains_real_personal_data": false,
+  "license": "Project MIT license",
+  "provenance": "First-party synthetic after-sales history. Tenant weights, contact rates, refund shares, carrier mixes and seasonality are hand-designed parameters, not measurements of any real merchant. Rows are generated deterministically from generator_seed; no third-party records are copied."
+}

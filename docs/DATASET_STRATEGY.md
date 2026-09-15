@@ -184,7 +184,17 @@ Day 10 已完成：
 4. 订单状态、金额、ETA 和 tracking 脱敏的确定性 Tool 测试；
 5. 6 个合成政策 chunk、manifest/hash 和固定 citation 检索基线。
 
-后续数据工作：
+2026-09-15 数据规模增量已完成：
+
+1. 默认 manifest 在 PostgreSQL 16 实际落库 1,000,000 订单及 2,246,760 条关联工单、消息、审批和审计记录，覆盖 12 租户与 730 天；
+2. 流式生成、20,000 订单分批、外键有序 `COPY`，完整装载 196.360 秒；
+3. 数据集指纹与注册表支持幂等跳过和部分批次续传，第二次装载阶段 0.560 秒且不新增行；
+4. 21 条跨表 SQL 质量规则全部通过，另提供来源隔离投影和六个业务分析视图；
+5. `SYNTHETIC_HISTORY` 与真实 Service/LangGraph 产生的 `LIVE_RUN` 分开统计，不把预生成轨迹计作模型运行量。
+
+完整证据和边界见 [`HISTORY_DATASET.md`](HISTORY_DATASET.md)。
+
+可选后续数据工作（不阻塞当前投递）：
 
 1. 只在转换规则和许可复核完成后加入 τ-bench `train` 子集；
 2. 把 τ-bench `test` split 存放在 Prompt 和 few-shot 不会读取的位置；

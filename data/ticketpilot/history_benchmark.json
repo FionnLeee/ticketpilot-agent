@@ -1,0 +1,55 @@
+{
+  "dataset_id": "ticketpilot-history-v1",
+  "fingerprint": "f238ae1b79f29997111eaccb70a5c27ef87ef049445276e297030937d7c3504a",
+  "measured_at": "2026-09-15T13:53:36+08:00",
+  "environment": {
+    "os": "Windows 11",
+    "python": "3.12.4",
+    "postgresql": "16.15"
+  },
+  "row_counts": {
+    "orders": 1000000,
+    "tickets": 235924,
+    "ticket_messages": 478813,
+    "approvals": 56127,
+    "audit_events": 1475896,
+    "total": 3246760
+  },
+  "load": {
+    "batch_orders": 20000,
+    "batches": 50,
+    "seconds": 196.36,
+    "orders_per_second": 5093,
+    "related_rows_per_second": 16535,
+    "end_to_end_seconds": 209.222
+  },
+  "quality": {
+    "checks_passed": 21,
+    "checks_failed": 0,
+    "seconds": 5.199
+  },
+  "rerun": {
+    "mode": "skipped",
+    "load_stage_seconds": 0.560,
+    "inserted_rows": 0
+  },
+  "partial_resume_smoke": {
+    "orders": 1000,
+    "mode": "resume",
+    "seconds": 3.826,
+    "inserted_rows": 0,
+    "quality_checks_passed": 21
+  },
+  "customer_recent_tickets_query": {
+    "plan_nodes": ["Limit", "Index Scan"],
+    "execution_time_ms": 0.083,
+    "note": "One local EXPLAIN ANALYZE sample; not a latency SLA."
+  },
+  "scope": {
+    "synthetic": true,
+    "contains_real_personal_data": false,
+    "real_llm_calls": 0,
+    "production_benchmark": false,
+    "database_size_note": "The database also contains earlier small-scale demo records."
+  }
+}

@@ -91,7 +91,7 @@ sequenceDiagram
 | --- | --- | --- |
 | Service | FastAPI service, agent registry, SSE streaming, Streamlit chat UI, Docker Compose | `TICKETPILOT_ENABLED` dedicated mode: only `/v1` business routes, `/info`, `/health`; generic routes answer 404 |
 | Workflow | `interrupt()` / `Command(resume)` samples, PostgreSQL checkpointer | Ticket graph: classification, order/policy tools, risk routing, approval pause/resume, result semantics |
-| Persistence | checkpoint and store wiring | Separate business pool, 6 versioned migrations, tickets/messages/orders/approvals/audit tables with constraints |
+| Persistence | checkpoint and store wiring | Separate business pool, 8 versioned migrations, five constrained business tables, plus streaming `COPY` and quality checks for million-order history |
 | Identity | optional bearer check | `TICKETPILOT_AUTH_TOKENS` → `RequestPrincipal`; ownership pushed into SQL; role checks |
 | Reliability | — | request idempotency, refund-action idempotency, active-run ownership, approval replay, pre-execution re-verification |
 | Evaluation | — | 18 + 6 synthetic Chinese samples, deterministic scorer, reproducible real-model evaluation script |
@@ -110,6 +110,12 @@ See [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md) for the full attribut
 | P1-A result semantics | timeouts, missing evidence and missing input all ended as `RESOLVED` | six `processing_result` values separate from ticket status, checked in the database, surfaced in the UI | `migrations/0006`, `tests/ticketpilot/test_workflow_graph.py` |
 
 Not claimed: exactly-once across a real payment provider (the refund is a mock; a real one needs a provider idempotency key, an outbox and reconciliation) and automatic takeover after a hard kill (a claimed run needs a recovery mechanism).
+
+## Million-order synthetic history and concurrency evidence
+
+The default history manifest was actually loaded into PostgreSQL 16: **1,000,000 orders, 235,924 tickets, 478,813 messages, 56,127 approvals and 1,475,896 audit events — 3,246,760 related rows** across 12 tenants and 730 days. The generator streams 20,000-order batches into foreign-key-ordered `COPY` transactions; the load took 196.360 s and all 21 cross-table quality checks passed. A dataset fingerprint makes reruns idempotent: the second load stage detected the registered data in 0.560 s and inserted nothing. Synthetic history and records produced by real Service/LangGraph runs are explicitly separated.
+
+The smaller executable workload covers 12 scenarios across 10 tenants and runs 1/10/30 concurrent in-process requests. Thirty identical requests produced one ticket/run; thirty identical approval calls executed one mock refund. These measurements exclude HTTP and real-model latency and are not production QPS. See [`docs/HISTORY_DATASET.md`](docs/HISTORY_DATASET.md) and [`docs/SCALE_DEMO.md`](docs/SCALE_DEMO.md) for commands, query plans, raw measurement boundaries and limitations.
 
 ## Real-model evaluation
 
@@ -163,7 +169,7 @@ uv run pytest tests/ticketpilot --run-docker   # needs the compose PostgreSQL
 uv run ruff check src tests scripts
 ```
 
-Results on 2026-09-15, Windows 11 / Python 3.12: default suite `288 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `105 passed` (35 of them run only with `--run-docker`); service isolation 8 passed; browser golden path 8/8 steps in about 55 s. The numbers come from different test selections and must not be summed.
+Results on 2026-09-15, Windows 11 / Python 3.12: default suite `295 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `112 passed`; service isolation 8 passed; browser golden path 8/8 steps in about 55 s. The selections overlap and must not be summed.
 
 ## Layout
 
@@ -171,9 +177,9 @@ Results on 2026-09-15, Windows 11 / Python 3.12: default suite `288 passed, 39 s
 src/ticketpilot/             business code: api / services / repositories / workflow_repository / graph / tools / reasoning / schemas / domain
 src/ticketpilot_streamlit.py demo workbench
 src/client/ticketpilot.py    business API client
-migrations/ticketpilot/      versioned SQL migrations 0001–0006
-data/ticketpilot/            synthetic order manifest, synthetic policy corpus, classification eval sets
-scripts/                     ticketpilot_demo.py (API acceptance), ticketpilot_ui_e2e.py (browser acceptance), evaluate_ticketpilot_classification.py
+migrations/ticketpilot/      versioned SQL migrations 0001–0008
+data/ticketpilot/            synthetic order/history manifests, policy corpus, classification eval sets
+scripts/                     API/browser acceptance, million-history load, scale/concurrency and real-model evaluation
 tests/ticketpilot/           API, isolation, repository, run ownership, refund semantics, graph and scorer tests
 docs/                        ARCHITECTURE, CONTRIBUTION_MAP, DATASET_STRATEGY, TICKETPILOT_DEMO, adr/
 ```
