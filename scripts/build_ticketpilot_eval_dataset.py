@@ -170,7 +170,14 @@ add_mixed(
     [
         ("订单 TP-9001 不要退款，只查物流", "ORDER_STATUS", "TP-9001", None, None, False),
         ("取消退款申请，不用退了", "OTHER", "TP-9002", "TP-9002", None, False),
-        ("O-NO-03 no refund, tell me delivery status", "ORDER_STATUS", "O-NO-03", None, None, False),
+        (
+            "O-NO-03 no refund, tell me delivery status",
+            "ORDER_STATUS",
+            "O-NO-03",
+            None,
+            None,
+            False,
+        ),
         ("别退钱，帮我看 TP-9004 到哪了", "ORDER_STATUS", "TP-9004", None, None, False),
         ("撤销刚才对 TP-9005 的退款", "OTHER", "TP-9005", None, None, False),
         ("我没说要退款，只是在描述问题", "OTHER", None, None, None, False),

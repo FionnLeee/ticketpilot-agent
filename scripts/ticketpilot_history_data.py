@@ -188,7 +188,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=20_000)
     parser.add_argument("--dsn", default=os.getenv("TICKETPILOT_HISTORY_DSN"))
     parser.add_argument("--replace", action="store_true", help="rebuild this dataset namespace")
-    parser.add_argument("--dry-run", action="store_true", help="generate and count without PostgreSQL")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="generate and count without PostgreSQL"
+    )
     parser.add_argument("--output", type=Path, help="optional JSON evidence report")
     parser.add_argument("--overwrite-output", action="store_true")
     args = parser.parse_args()

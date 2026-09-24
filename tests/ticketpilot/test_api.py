@@ -67,15 +67,11 @@ class FakeTicketService:
         self.approvals_call = None
         self.dashboard_call = None
 
-    async def list_tickets(
-        self, principal: RequestPrincipal, limit: int
-    ) -> TicketListResponse:
+    async def list_tickets(self, principal: RequestPrincipal, limit: int) -> TicketListResponse:
         self.list_call = (principal, limit)
         return TicketListResponse(items=[self.result.ticket])
 
-    async def list_approvals(
-        self, principal: RequestPrincipal, limit: int
-    ) -> ApprovalListResponse:
+    async def list_approvals(self, principal: RequestPrincipal, limit: int) -> ApprovalListResponse:
         self.approvals_call = (principal, limit)
         return ApprovalListResponse(items=[])
 

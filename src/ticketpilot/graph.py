@@ -263,8 +263,11 @@ async def capture_policy_result(
             "evidence_count": len(result.get("evidence", [])),
             "error_code": error_code,
             "citation_ids": [item.get("chunk_id") for item in result.get("evidence", [])],
-            **(runtime.context.policy_retriever.metadata()
-               if hasattr(runtime.context.policy_retriever, "metadata") else {}),
+            **(
+                runtime.context.policy_retriever.metadata()
+                if hasattr(runtime.context.policy_retriever, "metadata")
+                else {}
+            ),
         },
     )
     return {"policy_result": result}
@@ -412,9 +415,11 @@ async def generate_grounded_answer(
         answer = "本轮回答未通过依据校验或生成服务不可用，请转人工核查；没有执行退款。"
         return {
             "final_answer": answer,
-            "processing_result": (ProcessingResult.INSUFFICIENT_EVIDENCE.value
-                                  if isinstance(exc, InvalidCitation)
-                                  else ProcessingResult.DEPENDENCY_FAILED.value),
+            "processing_result": (
+                ProcessingResult.INSUFFICIENT_EVIDENCE.value
+                if isinstance(exc, InvalidCitation)
+                else ProcessingResult.DEPENDENCY_FAILED.value
+            ),
             "result_error_code": type(exc).__name__,
             "messages": [AIMessage(content=answer)],
         }

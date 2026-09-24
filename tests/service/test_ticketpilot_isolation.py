@@ -46,15 +46,15 @@ def test_ticketpilot_has_no_generic_entry_points(monkeypatch, bearer):
     app = service.create_app()
     assert set(app.openapi()["paths"]) == {
         "/info",
-            "/health",
-            "/v1/me",
-            "/v1/dashboard/summary",
-            "/v1/tickets",
-            "/v1/tickets/{ticket_id}",
-            "/v1/tickets/{ticket_id}/messages",
-            "/v1/runs/{run_id}/events",
-            "/v1/approvals",
-            "/v1/approvals/{approval_id}:decide",
+        "/health",
+        "/v1/me",
+        "/v1/dashboard/summary",
+        "/v1/tickets",
+        "/v1/tickets/{ticket_id}",
+        "/v1/tickets/{ticket_id}/messages",
+        "/v1/runs/{run_id}/events",
+        "/v1/approvals",
+        "/v1/approvals/{approval_id}:decide",
     }
     client = TestClient(app)
     headers = {"Authorization": f"Bearer {bearer}"} if bearer else {}

@@ -102,9 +102,12 @@ class TicketService:
             return await self._run_result(principal, ticket_id, run_id)
         except (ModelCallFailed, ExecutionLimitExceeded) as exc:
             await context.workflow_repository.record_unsuccessful_result(
-                principal.tenant_id, ticket_id, run_id,
+                principal.tenant_id,
+                ticket_id,
+                run_id,
                 "模型服务暂时不可用或本轮执行预算已用尽，请稍后重新提交或转人工核查。",
-                ProcessingResult.DEPENDENCY_FAILED, type(exc).__name__,
+                ProcessingResult.DEPENDENCY_FAILED,
+                type(exc).__name__,
             )
             return await self._run_result(principal, ticket_id, run_id)
         except BaseException as exc:
@@ -119,8 +122,11 @@ class TicketService:
             current_run.reset(token)
             try:
                 await context.workflow_repository.record_runtime_events(
-                    principal.tenant_id, ticket_id, run_id,
-                    telemetry.events, telemetry.summary(),
+                    principal.tenant_id,
+                    ticket_id,
+                    run_id,
+                    telemetry.events,
+                    telemetry.summary(),
                 )
             finally:
                 await self.repository.release_run(principal.tenant_id, ticket_id, run_id)
@@ -256,11 +262,7 @@ class TicketService:
         tenant = data["tenant"] or {}
         datasets = []
         for row in data["datasets"]:
-            counts = {
-                key: int(value)
-                for key, value in row["row_counts"].items()
-                if key != "total"
-            }
+            counts = {key: int(value) for key, value in row["row_counts"].items() if key != "total"}
             datasets.append(
                 DatasetEvidence(
                     dataset_id=row["dataset_id"],

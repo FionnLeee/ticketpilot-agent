@@ -122,11 +122,7 @@ async def evaluate(
     difficulty_counts: dict[str, Counter] = {}
     categories = sorted(
         {str(row["expected"]["category"]) for row in rows}
-        | {
-            str(row["actual"]["category"])
-            for row in rows
-            if row["actual"] is not None
-        }
+        | {str(row["actual"]["category"]) for row in rows if row["actual"] is not None}
     )
     confusion = {expected: dict.fromkeys(categories, 0) for expected in categories}
     for row in rows:
@@ -139,10 +135,22 @@ async def evaluate(
     category_metrics = {}
     for category in categories:
         true_positive = confusion[category][category]
-        false_positive = sum(confusion[other][category] for other in categories if other != category)
-        false_negative = sum(confusion[category][other] for other in categories if other != category)
-        precision = true_positive / (true_positive + false_positive) if true_positive + false_positive else 0
-        recall = true_positive / (true_positive + false_negative) if true_positive + false_negative else 0
+        false_positive = sum(
+            confusion[other][category] for other in categories if other != category
+        )
+        false_negative = sum(
+            confusion[category][other] for other in categories if other != category
+        )
+        precision = (
+            true_positive / (true_positive + false_positive)
+            if true_positive + false_positive
+            else 0
+        )
+        recall = (
+            true_positive / (true_positive + false_negative)
+            if true_positive + false_negative
+            else 0
+        )
         category_metrics[category] = {
             "precision": precision,
             "recall": recall,

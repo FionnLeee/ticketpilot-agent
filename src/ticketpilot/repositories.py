@@ -475,11 +475,11 @@ class TicketRepository:
             )
             return list(await cursor.fetchall())
 
-    async def list_tickets(
-        self, principal: RequestPrincipal, limit: int
-    ) -> list[dict[str, Any]]:
+    async def list_tickets(self, principal: RequestPrincipal, limit: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as connection:
-            customer_filter: LiteralString = "AND t.customer_id = %s" if principal.role is PrincipalRole.CUSTOMER else ""
+            customer_filter: LiteralString = (
+                "AND t.customer_id = %s" if principal.role is PrincipalRole.CUSTOMER else ""
+            )
             params: tuple[Any, ...] = (
                 (principal.tenant_id, principal.actor_id, limit)
                 if principal.role is PrincipalRole.CUSTOMER
