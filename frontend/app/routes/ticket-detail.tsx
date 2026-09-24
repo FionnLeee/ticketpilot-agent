@@ -4,6 +4,7 @@ import { type FormEvent, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { ErrorPanel, LoadingPanel, StatusPill } from "~/components/ui";
+import { PolicyRag } from "~/components/policy-rag";
 import { api, compactId, formatTime, type RunEvent } from "~/lib/api";
 import { useConsole } from "./shell";
 
@@ -49,6 +50,7 @@ export default function TicketDetailPage() {
       </section>
 
       <RuntimeDetails events={events.data?.events ?? []} />
+      <PolicyRag events={events.data?.events ?? []} messages={ticket.messages} runId={runId} loading={events.isLoading} failed={events.isError} />
 
       <div className="workspace-grid">
         <section className="panel conversation-panel">
@@ -79,8 +81,9 @@ function RuntimeDetails({ events }: { events: RunEvent[] }) {
       <div><dt>输入 / 输出 token</dt><dd>{summary.usage_complete ? `${summary.input_tokens} / ${summary.output_tokens}` : "供应商未完整返回"}</dd></div>
       <div><dt>预估费用</dt><dd>未配置价格</dd></div>
       <div><dt>政策检索</dt><dd>{String(retrieval?.retrieval_strategy ?? "legacy")}</dd></div>
+      {Number(summary.policy_cache_requests) > 0 && <div><dt>Redis 缓存命中</dt><dd>{String(summary.policy_cache_hits)} / {String(summary.policy_cache_requests)}</dd></div>}
     </dl>
-    <details><summary>查看各步骤耗时与结果</summary><dl>{events.filter((event) => event.event_type === "MODEL_CALL" || event.tool_name).map((event) => <div key={event.id}><dt>{event.tool_name ?? event.node_name} {event.details.attempt ? `#${event.details.attempt}` : ""}</dt><dd>{String(event.details.duration_ms ?? "—")} ms · {event.outcome}</dd></div>)}</dl></details>
+    <details><summary>查看各步骤耗时与结果</summary><dl>{events.filter((event) => event.event_type === "MODEL_CALL" || event.event_type === "POLICY_CACHE" || event.tool_name).map((event) => <div key={event.id}><dt>{event.event_type === "POLICY_CACHE" ? "Redis 缓存" : event.tool_name ?? event.node_name} {event.details.attempt ? `#${event.details.attempt}` : ""}</dt><dd>{String(event.details.duration_ms ?? "—")} ms · {event.outcome}{event.details.cache_status ? ` · ${event.details.cache_status}` : ""}{event.details.cache_write_status ? ` / ${event.details.cache_write_status}` : ""}</dd></div>)}</dl></details>
   </section>;
 }
 

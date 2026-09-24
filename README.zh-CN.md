@@ -2,12 +2,12 @@
 
 [English](README.md) | 简体中文
 
-**2026-09-15 补强：**新增 163 条政策语料、BM25/BGE 混合检索与重排、版本过滤、引用校验、运行预算与前端执行指标。[实现、实测结果和已知失败](docs/PRODUCTIONIZATION.md)。第二项目仍在规划阶段。
+政策咨询可在演示页直接提交，无需订单号；工单页展示本轮实际检索策略、证据及回答附带的政策原文。政策语料含 163 条条款，检索支持 BM25、BGE、混合召回与重排。固定回答演示模式不代表调用了 LLM；真实模型模式需单独配置。
 
 > 基于开源 [`agent-service-toolkit`](https://github.com/JoshuaC215/agent-service-toolkit)（MIT）二次开发。
 > **模型负责理解语言；确定性代码、PostgreSQL 和人工审批控制权限、状态与副作用。**
 
-`React 19 · TypeScript · React Router 7 · FastAPI · LangGraph · PostgreSQL · Docker Compose · Playwright`
+`React 19 · TypeScript · React Router 7 · FastAPI · LangGraph · PostgreSQL · Redis · Docker Compose · Playwright`
 
 <img src="media/ticketpilot/web-overview.png" width="1100" alt="TicketPilot AI 售后运营控制台">
 
@@ -119,11 +119,17 @@ sequenceDiagram
 
 默认历史 manifest 已在 PostgreSQL 16 实际落库：**1,000,000 订单、235,924 工单、478,813 消息、56,127 审批、1,475,896 审计事件，共 3,246,760 行**，覆盖 12 租户与 730 天。生成器按 20,000 订单流式分批、按外键顺序 `COPY`，196.360 秒完成装载；21 条跨表质量规则全部通过。数据集指纹支持幂等重跑，第二次装载阶段 0.560 秒识别并跳过，行数不增加；一组真实索引查询实际走 `Index Scan`。
 
-另有可执行规模演示：10,000 笔合成订单、10 租户、1,000 个客户、24 个政策片段；12 类业务场景在 10 租户下共 120 次工作流验证。预生成历史以 `SYNTHETIC_HISTORY` 标识，与真实 Service/LangGraph 运行产生的 `LIVE_RUN` 分开统计。详细数据契约、复跑命令、分析视图、耗时与限制见[百万级历史说明](docs/HISTORY_DATASET.md)。
+另有可执行规模演示：10,000 笔合成订单、10 租户、1,000 个客户、24 个政策片段；12 类业务场景在 10 租户下共 120 次工作流验证。预生成历史以 `SYNTHETIC_HISTORY` 标识，与真实 Service/LangGraph 运行产生的 `LIVE_RUN` 分开统计。生成与校验脚本位于 `scripts/`，输入 manifest 位于 `data/ticketpilot/`。
+
+复现生成器可先运行 `uv run python scripts/ticketpilot_history_data.py --orders 1000 --dry-run`。完整百万级入库需用 `--dsn` 指向专用的本地 PostgreSQL 数据库，可用 `--output` 将报告写到本地；不要指向生产库。
 
 本机做了两种明确分口径的负载实验。完整业务工作流 `TicketService → LangGraph → PostgreSQL` 在 1/10/30/100 并发下各运行 200 次，全部成功；100 次相同请求最终只有一个 ticket/run，100 次相同审批只扣减一次 Mock 金额、只产生一条 `REFUND_EXECUTED`。并发 10 后吞吐不再上升，并发 100 的 P95 达到 9.515 秒，暴露出连接池/checkpoint 写入的容量边界。
 
-另一次 HTTP 只读实验经 `Nginx → Uvicorn/FastAPI → Bearer → PostgreSQL`，在 1/20/50/100/200 并发下各发出 1,000 次请求，5,000/5,000 返回 200；本机峰值约 199 req/s（并发 20），并发 200 时约 172 req/s、P95 1.524 秒。它不包含 LLM 和写动作，不能冒充 Agent 端到端 QPS 或生产 SLA。测量口径和复跑命令见 [规模演示说明](docs/SCALE_DEMO.md)。
+另一次 HTTP 只读实验经 `Nginx → Uvicorn/FastAPI → Bearer → PostgreSQL`，在 1/20/50/100/200 并发下各发出 1,000 次请求，5,000/5,000 返回 200；本机峰值约 199 req/s（并发 20），并发 200 时约 172 req/s、P95 1.524 秒。后续 1,000 客户端并发、3,000 请求的只读补测中，3,000/3,000 返回 200，但吞吐下降至 180.58 req/s，P95 升至 7.184 秒。它们不包含 LLM 和写动作，不能冒充 Agent 端到端 QPS 或生产 SLA。测量脚本为 `scripts/ticketpilot_http_benchmark.py`。
+
+## 政策检索缓存
+
+可选 Redis 包装器按租户、语料版本、生效条款、查询和检索配置缓存政策 ID，引用正文仍从当前语料重建。短期空结果缓存、有界等待和按持有者发布的租约减少跨进程冷启动重复计算；Redis 失联则直接检索。订单、审批和退款事实仍由 PostgreSQL 管理。启动时叠加 `docker/compose.ticketpilot-redis.yaml`；不叠加即不启用缓存。参数见 `.env.example`，回放脚本为 `scripts/evaluate_ticketpilot_cache.py`，本地结果报告不入 Git。
 
 ## 真实模型评测（M2）
 
@@ -134,7 +140,7 @@ sequenceDiagram
 | 原 18 条开发集 | 15/18 | 18/18 |
 | 6 条针对性迁移样本 | 4/6 | 5/6 |
 
-2026-09-14 单次实验，`qwen3.7-flash`，temperature 0.5，平均每条约 13–15 秒。v2 只改系统提示词（明确全额标志、已知订单继承、纯订单号路由），三处原始错误修复且无退步；「支付的钱全部退给我」仍漏全额标志，保留为已知限制。这是开发集成绩，不是线上准确率。细节见 [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md)。
+2026-09-14 单次实验，`qwen3.7-flash`，temperature 0.5，平均每条约 13–15 秒。v2 只改系统提示词（明确全额标志、已知订单继承、纯订单号路由），三处原始错误修复且无退步；「支付的钱全部退给我」仍漏全额标志，保留为已知限制。这是开发集成绩，不是线上准确率。
 
 2026-09-15 在新建的 120 条困难中文评测集上，`qwen3.7-flash` 四字段严格精确匹配为 **101/120（84.17%，Wilson 95% CI 76.59%–89.62%）**，类别字段 95.83%，订单号 95.00%，金额 97.50%，全额标志 86.67%；3 条调用/结构校验错误保留在分母内。最大弱项集中在全额退款口语化表达（2/15），属于保守漏识别而非越权执行。
 
@@ -151,7 +157,7 @@ cp .env.example .env            # 至少保留 POSTGRES_* 默认值
 docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml up -d --build
 ```
 
-打开 `http://localhost:3000` 使用正式 React 运营控制台；`http://localhost:8501` 保留为内部 Streamlit 调试台。启动、身份和页面说明见 [`docs/WEB_CONSOLE.md`](docs/WEB_CONSOLE.md)，五分钟业务脚本见 [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md)。
+打开 `http://localhost:3000` 使用 React 运营控制台；演示页提供物流、退款审批和无需订单号的政策 RAG 场景。确定性演示不调用付费模型。`http://localhost:8501` 保留为内部 Streamlit 调试台。
 
 自动化验收：
 
@@ -198,19 +204,14 @@ migrations/ticketpilot/     0001–0008 版本化 SQL 迁移
 data/ticketpilot/           合成订单/历史 manifest、政策语料、分类评测集
 scripts/                    API/浏览器验收、百万历史装载、规模并发与真实模型评测脚本
 tests/ticketpilot/          API、隔离、仓储、并发归属、退款语义、graph、评测器测试
-docs/                       ARCHITECTURE、CONTRIBUTION_MAP、DATASET_STRATEGY、TICKETPILOT_DEMO、adr/
+docs/                       公开架构与贡献归属说明
 ```
 
 ## 文档
 
-- [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md)：启动、身份、五分钟演示脚本、自动化验收
-- [`docs/WEB_CONSOLE.md`](docs/WEB_CONSOLE.md)：React 运营控制台架构、启动与页面说明
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：架构原则、状态机、数据模型、审批与恢复设计
 - [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md)：上游能力 / 个人贡献 / 明确不做
-- [`docs/DATASET_STRATEGY.md`](docs/DATASET_STRATEGY.md)：合成数据来源与许可
-- [`docs/HISTORY_DATASET.md`](docs/HISTORY_DATASET.md)：百万级关系数据、装载、质量规则与分析视图
-- [`docs/adr/0001-ticketpilot-scope.md`](docs/adr/0001-ticketpilot-scope.md)：范围决策记录
-- [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md)：评测契约与实验记录
+- [`UPSTREAM.md`](UPSTREAM.md)：上游来源与许可证边界
 
 ## 上游工具包与通用模式
 

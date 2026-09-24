@@ -5,7 +5,7 @@ English | [简体中文](README.zh-CN.md)
 > Built on the MIT-licensed [`agent-service-toolkit`](https://github.com/JoshuaC215/agent-service-toolkit).
 > **The model understands language; deterministic code, PostgreSQL and a human approver own permissions, state and side effects.**
 
-`React 19 · TypeScript · React Router 7 · FastAPI · LangGraph · PostgreSQL · Docker Compose · Playwright`
+`React 19 · TypeScript · React Router 7 · FastAPI · LangGraph · PostgreSQL · Redis (optional) · Docker Compose · Playwright`
 
 <img src="media/ticketpilot/web-overview.png" width="1100" alt="TicketPilot AI after-sales operations console">
 
@@ -100,7 +100,7 @@ sequenceDiagram
 | Evaluation | — | 120-case Chinese diagnostic set, bounded-concurrency runner, Wilson interval, per-scenario metrics, confusion matrix and reproducible real-model reports |
 | Demo | generic chat page | React/TypeScript operations console and Execution Runway; Streamlit retained as an internal workbench; API and browser golden paths |
 
-See [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md) for the full attribution and [`UPSTREAM.md`](UPSTREAM.md) for provenance. Upstream capabilities are not claimed as my own work.
+See [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md) for the contribution boundary and [`UPSTREAM.md`](UPSTREAM.md) for provenance. Upstream capabilities are not claimed as my own work.
 
 ## Reliability work, with evidence
 
@@ -118,9 +118,15 @@ Not claimed: exactly-once across a real payment provider (the refund is a mock; 
 
 The default history manifest was actually loaded into PostgreSQL 16: **1,000,000 orders, 235,924 tickets, 478,813 messages, 56,127 approvals and 1,475,896 audit events — 3,246,760 related rows** across 12 tenants and 730 days. The generator streams 20,000-order batches into foreign-key-ordered `COPY` transactions; the load took 196.360 s and all 21 cross-table quality checks passed. A dataset fingerprint makes reruns idempotent: the second load stage detected the registered data in 0.560 s and inserted nothing. Synthetic history and records produced by real Service/LangGraph runs are explicitly separated.
 
+To reproduce the generator safely, start with `uv run python scripts/ticketpilot_history_data.py --orders 1000 --dry-run`. Loading the full manifest needs a dedicated local PostgreSQL database passed through `--dsn`; the command also accepts `--output` for a local JSON report. Do not target a production database.
+
 Two workloads keep their measurement boundaries explicit. The full `TicketService → LangGraph → PostgreSQL` path ran 200 requests at concurrency 1/10/30/100 with no failures; 100 identical creates produced one ticket/run and 100 identical approvals executed one mock refund. Throughput stopped scaling after concurrency 10 and P95 reached 9.515 s at concurrency 100, exposing a real capacity boundary.
 
-A separate HTTP read test traversed `Nginx → Uvicorn/FastAPI → Bearer → PostgreSQL`: 5,000/5,000 responses were 200 across concurrency 1/20/50/100/200. The local peak was about 199 req/s at concurrency 20; at 200 it was about 172 req/s with 1.524 s P95. It excludes LLM and writes, so it is neither Agent throughput nor a production SLA. See [`docs/HISTORY_DATASET.md`](docs/HISTORY_DATASET.md) and [`docs/SCALE_DEMO.md`](docs/SCALE_DEMO.md).
+A separate HTTP read test traversed `Nginx → Uvicorn/FastAPI → Bearer → PostgreSQL`: 5,000/5,000 responses were 200 across concurrency 1/20/50/100/200. The local peak was about 199 req/s at concurrency 20; at 200 it was about 172 req/s with 1.524 s P95. A later 3,000-request test at 1,000 client connections returned 3,000/3,000 HTTP 200, but throughput fell to 180.58 req/s and P95 rose to 7.184 s. Both tests exclude LLM and writes; neither is Agent throughput or a production SLA. The read workload is implemented by `scripts/ticketpilot_http_benchmark.py`.
+
+## Policy retrieval cache
+
+The optional Redis wrapper caches applicable policy IDs for each tenant, corpus/version, query and retrieval configuration; citations are rebuilt from the current policy corpus. Short negative TTLs, bounded waiting and owner-checked leases reduce duplicate cold retrievals across workers. Redis failures fall back to direct retrieval, while the refund and approval facts remain in PostgreSQL. Run it with `docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml -f docker/compose.ticketpilot-redis.yaml up -d --build`; omit the Redis overlay to disable the cache. `TICKETPILOT_REDIS_URL` and cache limits are documented in `.env.example`. The cache replay script is `scripts/evaluate_ticketpilot_cache.py`; its local output reports are intentionally excluded from Git.
 
 ## Real-model evaluation
 
@@ -133,7 +139,7 @@ A separate HTTP read test traversed `Nginx → Uvicorn/FastAPI → Bearer → Po
 
 On 2026-09-15, a new 120-case diagnostic set (8 scenario families; 90 hard and 30 medium cases) produced **101/120 strict exact matches = 84.17%** with a Wilson 95% CI of **76.59%–89.62%**. Three call/schema errors remain in the denominator. The concentrated weakness was colloquial full-refund intent at 2/15.
 
-The investigation found that the OpenAI-compatible wire schema did not require every output field, so the provider could omit `full_refund_requested` and a local default silently became `false`. Requiring every field and removing defaults was followed by a declared 45-case targeted regression: **44/45 = 97.78%**, zero call errors, and full-refund improved from **2/15 to 15/15** while negation/cancellation stayed 15/15. This targeted score is not presented as a post-fix score for all 120 cases. Details and limitations are in [`data/ticketpilot/evals/README.md`](data/ticketpilot/evals/README.md).
+The investigation found that the OpenAI-compatible wire schema did not require every output field, so the provider could omit `full_refund_requested` and a local default silently became `false`. Requiring every field and removing defaults was followed by a declared 45-case targeted regression: **44/45 = 97.78%**, zero call errors, and full-refund improved from **2/15 to 15/15** while negation/cancellation stayed 15/15. This targeted score is not presented as a post-fix score for all 120 cases. The versioned input set is `data/ticketpilot/evals/classification_eval_v2.json`; local result reports are excluded from Git.
 
 One integration finding: the OpenAI-compatible provider rejected the JSON Schema regex generated for `Decimal` before the model ever answered; the wire schema now uses `number | null` and Pydantic still validates positivity, two decimals and the upper bound after the response.
 
@@ -146,7 +152,7 @@ cp .env.example .env            # keep at least the POSTGRES_* defaults
 docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml up -d --build
 ```
 
-Open `http://localhost:3000` for the formal React operations console. `http://localhost:8501` remains the internal Streamlit workbench. See [`docs/WEB_CONSOLE.md`](docs/WEB_CONSOLE.md) and the five-minute script in [`docs/TICKETPILOT_DEMO.md`](docs/TICKETPILOT_DEMO.md) (Chinese).
+Open `http://localhost:3000` for the React operations console. Its demo route offers logistics, refund approval and policy RAG scenarios; the policy route does not require an order number. The deterministic demo does not call a paid model. `http://localhost:8501` remains the internal Streamlit workbench.
 
 Automated acceptance:
 
@@ -185,7 +191,7 @@ migrations/ticketpilot/      versioned SQL migrations 0001–0008
 data/ticketpilot/            synthetic order/history manifests, policy corpus, classification eval sets
 scripts/                     API/browser acceptance, million-history load, scale/concurrency and real-model evaluation
 tests/ticketpilot/           API, isolation, repository, run ownership, refund semantics, graph and scorer tests
-docs/                        ARCHITECTURE, WEB_CONSOLE, CONTRIBUTION_MAP, dataset/scale docs, adr/
+docs/                        public architecture and contribution attribution only
 ```
 
 ## Upstream toolkit and generic mode

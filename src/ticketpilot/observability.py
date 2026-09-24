@@ -59,6 +59,10 @@ class RunTelemetry:
             "trace_id": self.trace_id,
             "duration_ms": round((perf_counter() - self.started) * 1000),
             "model_calls": self.calls,
+            "policy_cache_hits": sum(
+                e.get("cache_status") == "HIT" for e in self.events if e.get("kind") == "cache"
+            ),
+            "policy_cache_requests": sum(e.get("kind") == "cache" for e in self.events),
             "budget_tokens_charged": self.charged_tokens,
             "usage_complete": known,
             "input_tokens": sum(e["input_tokens"] for e in usage) if known else None,

@@ -26,7 +26,7 @@ MVP 的完成标准不是“模型能聊天”，而是同时满足：
 - 普通咨询和退款审批都有 API、工具与 graph 层测试。
 
 贡献归属见 [`CONTRIBUTION_MAP.md`](CONTRIBUTION_MAP.md)。
-数据来源、许可、转换和盲测隔离见 [`DATASET_STRATEGY.md`](DATASET_STRATEGY.md)。
+合成数据配置见 `data/ticketpilot/` 下的版本化 manifest；评测口径与限制见 [`README.zh-CN.md`](../README.zh-CN.md)。
 
 ## 2. 架构原则
 
@@ -715,5 +715,5 @@ migrations/
 
 如果后续实现需要改变以上边界，先修改 ADR 并说明原因，再调整代码。
 
-启动、演示脚本与自动化验收见 [`TICKETPILOT_DEMO.md`](TICKETPILOT_DEMO.md)；按阶段的实现记录见
+启动、演示脚本与自动化验收见 [`README.zh-CN.md`](../README.zh-CN.md)；按阶段的实现记录见
 [`CONTRIBUTION_MAP.md`](CONTRIBUTION_MAP.md) 第 9–14 节。

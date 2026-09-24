@@ -5,7 +5,6 @@ import math
 import os
 import platform
 import subprocess
-import sys
 import time
 from collections import Counter
 from datetime import UTC, datetime
@@ -46,14 +45,13 @@ async def run(args: argparse.Namespace) -> dict:
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
         "dirty": bool(
-            subprocess.check_output(
-                ["git", "status", "--porcelain"], cwd=ROOT, text=True
-            ).strip()
+            subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()
         ),
         "environment": {
             "platform": platform.platform(),
             "python": platform.python_version(),
             "httpx": httpx.__version__,
+            "event_loop": type(asyncio.get_running_loop()).__name__,
         },
         "method": (
             "HTTP GET through Uvicorn/FastAPI, TicketPilot bearer authentication and "
@@ -83,38 +81,57 @@ async def run(args: argparse.Namespace) -> dict:
 
         for concurrency in args.levels:
             semaphore = asyncio.Semaphore(concurrency)
-            rows: list[dict[str, float | int]] = []
+            rows: list[dict] = []
+            inflight = 0
+            peak_inflight = 0
 
             async def one(index: int) -> None:
+                nonlocal inflight, peak_inflight
                 async with semaphore:
                     started = time.perf_counter()
-                    response = await client.get(f"/v1/tickets/{ticket_id}")
-                    rows.append(
-                        {
-                            "index": index,
-                            "status": response.status_code,
-                            "latency_ms": round((time.perf_counter() - started) * 1000, 3),
-                        }
-                    )
+                    inflight += 1
+                    peak_inflight = max(peak_inflight, inflight)
+                    row = {"index": index, "status": 0, "error_type": None}
+                    try:
+                        response = await client.get(f"/v1/tickets/{ticket_id}")
+                        row["status"] = response.status_code
+                    except httpx.HTTPError as exc:
+                        row["error_type"] = type(exc).__name__
+                    finally:
+                        inflight -= 1
+                        row["latency_ms"] = round((time.perf_counter() - started) * 1000, 3)
+                        rows.append(row)
 
             started = time.perf_counter()
             await asyncio.gather(*(one(index) for index in range(args.requests)))
             elapsed = time.perf_counter() - started
             latencies = sorted(float(row["latency_ms"]) for row in rows)
             status_counts = Counter(int(row["status"]) for row in rows)
+            success_latencies = sorted(
+                float(row["latency_ms"]) for row in rows if row["status"] == 200
+            )
             phase = {
                 "concurrency": concurrency,
+                "peak_client_inflight": peak_inflight,
                 "requests": args.requests,
                 "elapsed_seconds": round(elapsed, 3),
                 "requests_per_second": round(args.requests / elapsed, 2),
                 "status_counts": {str(code): count for code, count in status_counts.items()},
+                "error_counts": dict(
+                    Counter(row["error_type"] for row in rows if row["error_type"])
+                ),
+                "successful_requests_per_second": round(status_counts[200] / elapsed, 2),
+                "success_rate": status_counts[200] / args.requests,
                 "p50_ms": percentile(latencies, 0.50),
                 "p95_ms": percentile(latencies, 0.95),
                 "p99_ms": percentile(latencies, 0.99),
+                "success_p95_ms": (
+                    percentile(success_latencies, 0.95) if success_latencies else None
+                ),
                 "client_semaphore_wait_excluded_from_latency": True,
             }
-            report["phases"].append(phase)
             print(json.dumps(phase), flush=True)
+            report["phases"].append({**phase, "rows": sorted(rows, key=lambda row: row["index"])})
             if status_counts != Counter({200: args.requests}):
                 report.setdefault("failures", []).append(f"concurrency-{concurrency}")
 
@@ -147,6 +164,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     main()

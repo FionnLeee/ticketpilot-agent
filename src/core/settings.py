@@ -145,6 +145,12 @@ class Settings(BaseSettings):
     TICKETPILOT_REASONER_MODE: TicketPilotReasonerMode = TicketPilotReasonerMode.LLM
     TICKETPILOT_RETRIEVAL_STRATEGY: Literal["keyword", "bm25", "dense", "hybrid", "rerank"] = "bm25"
     TICKETPILOT_MODEL_CACHE: str | None = None
+    TICKETPILOT_REDIS_URL: SecretStr | None = None
+    TICKETPILOT_CACHE_TTL: int = Field(default=600, ge=1, le=86400)
+    TICKETPILOT_CACHE_NEGATIVE_TTL: int = Field(default=30, ge=1, le=300)
+    TICKETPILOT_CACHE_TIMEOUT: float = Field(default=0.15, gt=0, le=1)
+    TICKETPILOT_CACHE_WAIT: float = Field(default=1.5, gt=0, le=2)
+    TICKETPILOT_CACHE_MAX_INFLIGHT: int = Field(default=64, ge=1, le=256)
     TICKETPILOT_MIN_SIMILARITY: float = Field(default=0.50, ge=0, le=1)
     TICKETPILOT_RUN_DEADLINE: float = Field(default=120, gt=0, le=600)
     TICKETPILOT_CALL_TIMEOUT: float = Field(default=45, gt=0, le=120)

@@ -167,7 +167,12 @@ class HybridPolicyRetriever:
         self.slots = BoundedSemaphore(2)
 
     async def search(
-        self, principal: RequestPrincipal, query: str, limit: int = 5
+        self,
+        principal: RequestPrincipal,
+        query: str,
+        limit: int = 5,
+        *,
+        as_of: datetime | None = None,
     ) -> list[Citation]:
         if not self.slots.acquire(blocking=False):
             raise TimeoutError("retrieval_capacity")
@@ -180,6 +185,7 @@ class HybridPolicyRetriever:
                     strategy=self.strategy,
                     limit=limit,
                     min_similarity=self.min_similarity,
+                    as_of=as_of,
                 )
             finally:
                 self.slots.release()

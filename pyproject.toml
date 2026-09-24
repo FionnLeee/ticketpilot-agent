@@ -58,6 +58,7 @@ dependencies = [
     "langchain-mcp-adapters>=0.3.0",
     "ddgs>=9.14.4",
     "ag-ui-langgraph~=0.0.42",
+    "redis>=6.4,<9",
 ]
 
 [project.optional-dependencies]

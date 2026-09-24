@@ -59,6 +59,7 @@ from ticketpilot.db import apply_migrations, get_ticketpilot_pool
 from ticketpilot.graph import build_ticketpilot_graph
 from ticketpilot.policies import DEFAULT_POLICY_MANIFEST_PATH
 from ticketpilot.retrieval import build_policy_retriever
+from ticketpilot.retrieval_cache import CachedPolicyRetriever, create_cache_client
 
 warnings.filterwarnings("ignore", category=LangChainBetaWarning)
 logger = logging.getLogger(__name__)
@@ -119,6 +120,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     settings.TICKETPILOT_MODEL_CACHE,
                     settings.TICKETPILOT_MIN_SIMILARITY,
                 )
+                if settings.TICKETPILOT_REDIS_URL:
+                    cache_client = create_cache_client(
+                        settings.TICKETPILOT_REDIS_URL.get_secret_value(),
+                        settings.TICKETPILOT_CACHE_TIMEOUT,
+                    )
+                    stack.push_async_callback(cache_client.aclose)
+                    app.state.ticketpilot_retriever = CachedPolicyRetriever(
+                        app.state.ticketpilot_retriever,
+                        cache_client,
+                        ttl_seconds=settings.TICKETPILOT_CACHE_TTL,
+                        negative_ttl_seconds=settings.TICKETPILOT_CACHE_NEGATIVE_TTL,
+                        timeout_seconds=settings.TICKETPILOT_CACHE_TIMEOUT,
+                        wait_seconds=settings.TICKETPILOT_CACHE_WAIT,
+                        max_inflight=settings.TICKETPILOT_CACHE_MAX_INFLIGHT,
+                    )
                 app.state.ticketpilot_graph = build_ticketpilot_graph(checkpointer=saver)
 
             if not settings.AUTH_SECRET:
