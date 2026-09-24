@@ -109,5 +109,7 @@ async def test_reasoner_selects_compatible_transport_and_keeps_local_validation(
             {"type": "number"},
             {"type": "null"},
         ]
+        assert set(args[0]["required"]) == set(args[0]["properties"])
+        assert all("default" not in item for item in args[0]["properties"].values())
     else:
         model.with_structured_output.assert_called_once_with(TicketClassification)

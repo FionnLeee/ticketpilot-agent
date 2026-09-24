@@ -372,6 +372,7 @@ async def test_day11_normal_order_flow_is_grounded_and_resolved() -> None:
                 "TOOL_SUCCEEDED",
                 "TOOL_SUCCEEDED",
                 "TICKET_RESOLVED",
+                "RUN_TELEMETRY",
             ]
             tool_events = [event for event in events.events if event.tool_name]
             assert [event.tool_name for event in tool_events] == ["query_order", "search_policy"]
@@ -435,6 +436,7 @@ async def test_day14_add_message_reuses_thread_and_is_idempotent() -> None:
                 "TOOL_SUCCEEDED",
                 "TOOL_SUCCEEDED",
                 "TICKET_RESOLVED",
+                "RUN_TELEMETRY",
             ]
             with pytest.raises(StateConflict):
                 await service.add_message(
@@ -517,8 +519,9 @@ async def test_day14_order_timeout_is_audited_and_fails_closed() -> None:
             assert "未找到" not in result.latest_message.content
             assert order_event.event_type == "TOOL_FAILED"
             assert order_event.details["error_code"] == "DEPENDENCY_TIMEOUT"
-            assert events.events[-1].event_type == "DEPENDENCY_FAILED"
-            assert events.events[-1].details == {
+            assert events.events[-1].event_type == "RUN_TELEMETRY"
+            failure = next(e for e in events.events if e.event_type == "DEPENDENCY_FAILED")
+            assert failure.details == {
                 "error_code": "DEPENDENCY_TIMEOUT",
                 "processing_result": "DEPENDENCY_FAILED",
             }
@@ -554,8 +557,8 @@ async def test_policy_without_evidence_is_not_reported_as_resolved() -> None:
             assert result.ticket.status is TicketStatus.FAILED
             assert result.ticket.processing_result is ProcessingResult.INSUFFICIENT_EVIDENCE
             assert "无法给出有依据的结论" in result.latest_message.content
-            assert events.events[-1].event_type == "INSUFFICIENT_EVIDENCE"
-            assert events.events[-1].details["error_code"] == "NO_RELEVANT_POLICY"
+            failure = next(e for e in events.events if e.event_type == "INSUFFICIENT_EVIDENCE")
+            assert failure.details["error_code"] == "NO_RELEVANT_POLICY"
         finally:
             if thread_id:
                 await saver.adelete_thread(thread_id)
@@ -615,8 +618,8 @@ async def test_day14_unhandled_reasoner_failure_marks_ticket_failed() -> None:
 
             assert detail.status is TicketStatus.FAILED
             assert detail.processing_result is ProcessingResult.PROCESSING_FAILED
-            assert events.events[-1].event_type == "RUN_FAILED"
-            assert events.events[-1].details["error_code"] == "RuntimeError"
+            failure = next(e for e in events.events if e.event_type == "RUN_FAILED")
+            assert failure.details["error_code"] == "RuntimeError"
         finally:
             if thread_id:
                 await saver.adelete_thread(thread_id)
@@ -813,10 +816,13 @@ async def test_day12_postgres_checkpoint_resume_and_refund_idempotency() -> None
             }
             assert approval == {"status": "EXECUTED"}
             assert execution_count == {"count": 1}
-            assert initial_events.events[-1].event_type == "REFUND_APPROVAL_REQUESTED"
+            assert initial_events.events[-2].event_type == "REFUND_APPROVAL_REQUESTED"
+            assert initial_events.events[-1].details["model_calls"] == 0
+            assert initial_events.events[-1].details["action_id"]
             assert [event.event_type for event in approval_events.events] == [
                 "APPROVAL_DECIDED",
                 "REFUND_EXECUTED",
+                "RUN_TELEMETRY",
             ]
             assert [event.event_type for event in replay_events.events] == [
                 "APPROVAL_DECISION_REPLAYED"

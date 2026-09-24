@@ -977,6 +977,7 @@ class TicketWorkflowRepository:
                     resolution_summary = CASE WHEN status = %s THEN resolution_summary ELSE %s END,
                     version = version + 1, updated_at = now()
                 WHERE tenant_id = %s AND id = %s AND active_run_id = %s AND run_started
+                  AND status IN ('NEW', 'PROCESSING', 'WAITING_APPROVAL')
                 RETURNING status, processing_result
                 """,
                 (
@@ -1007,6 +1008,54 @@ class TicketWorkflowRepository:
                     "error_code": error_code,
                     "processing_result": result["processing_result"],
                 },
+            )
+
+    async def record_runtime_events(
+        self,
+        tenant_id: str,
+        ticket_id: UUID,
+        run_id: UUID,
+        events: list[dict[str, Any]],
+        summary: dict[str, Any],
+    ) -> None:
+        async with self.pool.connection() as connection, connection.transaction():
+            await self._require_owner(connection, tenant_id, ticket_id, run_id)
+            cursor = await connection.execute(
+                "SELECT trigger_message_id FROM ticketpilot.tickets WHERE tenant_id = %s AND id = %s",
+                (tenant_id, ticket_id),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                raise ResourceNotFound("Ticket")
+            summary = {
+                **summary,
+                "action_id": str(row["trigger_message_id"]),
+                "budget_scope": "execution_run; approval resume starts a new run",
+            }
+            for event in events:
+                await self._append_audit(
+                    connection,
+                    tenant_id,
+                    ticket_id,
+                    run_id,
+                    "POLICY_CACHE" if event.get("kind") == "cache" else "MODEL_CALL",
+                    AuditOutcome.SUCCEEDED
+                    if event.get("outcome") == "SUCCEEDED"
+                    else AuditOutcome.FAILED,
+                    actor_type=ActorType.AGENT,
+                    node_name=event["stage"],
+                    details=event,
+                )
+            await self._append_audit(
+                connection,
+                tenant_id,
+                ticket_id,
+                run_id,
+                "RUN_TELEMETRY",
+                AuditOutcome.SUCCEEDED,
+                actor_type=ActorType.SYSTEM,
+                node_name="runtime",
+                details=summary,
             )
 
     async def record_tool_result(

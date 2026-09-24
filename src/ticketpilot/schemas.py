@@ -55,6 +55,8 @@ class Citation(TicketPilotModel):
     uri: HttpUrl | None = None
     chunk_id: str | None = Field(default=None, max_length=256)
     excerpt: str | None = Field(default=None, max_length=1500)
+    policy_version: str | None = None
+    effective_at: str | None = None
 
 
 class OrderSummary(TicketPilotModel):
@@ -182,6 +184,68 @@ class TicketRunResult(TicketPilotModel):
     run_id: UUID
     latest_message: TicketMessageView | None = None
     pending_approval: ApprovalSummary | None = None
+
+
+class IdentityResponse(TicketPilotModel):
+    tenant_id: str
+    actor_id: str
+    role: PrincipalRole
+
+
+class TicketListResponse(TicketPilotModel):
+    items: list[TicketSummary] = Field(default_factory=list)
+
+
+class ApprovalQueueItem(TicketPilotModel):
+    id: UUID
+    ticket_id: UUID
+    run_id: UUID
+    subject: str
+    order_reference: str | None = None
+    action_type: str
+    action_payload: dict[str, Any]
+    status: ApprovalStatus
+    requested_at: datetime
+
+
+class ApprovalListResponse(TicketPilotModel):
+    items: list[ApprovalQueueItem] = Field(default_factory=list)
+
+
+class DatasetEvidence(TicketPilotModel):
+    dataset_id: str
+    loaded_at: datetime
+    evidence_source: str
+    row_counts: dict[str, int]
+    total_rows: int = Field(ge=0)
+
+
+class DailyTicketVolumePoint(TicketPilotModel):
+    day: str
+    created_count: int = Field(ge=0)
+    refund_count: int = Field(ge=0)
+    resolved_count: int = Field(ge=0)
+    failed_count: int = Field(ge=0)
+
+
+class RefundFunnelPoint(TicketPilotModel):
+    status: ApprovalStatus
+    approval_count: int = Field(ge=0)
+    requested_amount: Decimal = Field(ge=Decimal("0"))
+
+
+class DashboardSummary(TicketPilotModel):
+    tenant_id: str
+    order_count: int = Field(ge=0)
+    customer_count: int = Field(ge=0)
+    ticket_count: int = Field(ge=0)
+    open_ticket_count: int = Field(ge=0)
+    refund_ticket_count: int = Field(ge=0)
+    contact_rate: Decimal = Field(ge=Decimal("0"))
+    avg_resolution_minutes: Decimal | None = Field(default=None, ge=Decimal("0"))
+    datasets: list[DatasetEvidence] = Field(default_factory=list)
+    daily_volume: list[DailyTicketVolumePoint] = Field(default_factory=list)
+    refund_funnel: list[RefundFunnelPoint] = Field(default_factory=list)
 
 
 class AuditEventView(TicketPilotModel):

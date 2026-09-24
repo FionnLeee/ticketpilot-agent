@@ -9,5 +9,9 @@
 env
 venv
 .venv
+frontend/node_modules
+frontend/build
+frontend/dist
+frontend/.react-router
 *.db
 privatecredentials/*

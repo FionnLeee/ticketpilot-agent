@@ -32,6 +32,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/app/lib/
 lib64/
 parts/
 sdist/
@@ -189,7 +190,9 @@ privatecredentials/*
 
 # Node (scripts/agui-client)
 node_modules/
-package-lock.json
+/package-lock.json
+frontend/build/
+frontend/.react-router/
 
 # Live-app smoke test failure screenshot (scripts/smoke_live_app.py)
 smoke_live_app_failure.png
@@ -197,5 +200,18 @@ smoke_live_app_failure.png
 # Claude Code agent worktrees (ephemeral, per-agent git checkouts)
 .claude/worktrees/
 
-# Personal TicketPilot study notes (design docs under docs/ are tracked)
-/docs/LEARNING_NOTES_DAY_*.md
+# Keep only public architecture and contribution attribution in Git.
+/CLAUDE.md
+/.claude/
+/docs/*
+!/docs/ARCHITECTURE.md
+!/docs/CONTRIBUTION_MAP.md
+/docs/adr/
+/docs/maintenance/
+
+# Evaluation inputs remain reproducible; local reports and run output stay private.
+/data/ticketpilot/benchmarks/*.json
+/data/ticketpilot/evals/README.md
+/data/ticketpilot/evals/*results*.json
+/data/ticketpilot/evals/productionization_*/
+/data/ticketpilot/evals/*report*.json

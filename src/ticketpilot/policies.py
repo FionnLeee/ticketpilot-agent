@@ -1,6 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -26,6 +27,10 @@ class PolicyChunk:
     tenant_ids: frozenset[str]
     keywords: tuple[str, ...]
     content: str
+    rule_id: str = ""
+    version: str = "v1"
+    effective_at: str = "2026-01-01T00:00:00+00:00"
+    expires_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,10 @@ def load_policy_corpus(
             tenant_ids=frozenset(item["tenant_ids"]),
             keywords=tuple(keyword.casefold() for keyword in item["keywords"]),
             content=item["content"],
+            rule_id=item.get("rule_id", item["chunk_id"]),
+            version=item.get("version", "v1"),
+            effective_at=item.get("effective_at", manifest["effective_at"]),
+            expires_at=item.get("expires_at"),
         )
         for item in payload["chunks"]
     )
@@ -68,6 +77,45 @@ def load_policy_corpus(
         dataset_id=manifest["dataset_id"],
         effective_at=manifest["effective_at"],
         chunks=chunks,
+    )
+
+
+def applicable_chunks(
+    corpus: PolicyCorpus, principal: RequestPrincipal, as_of: datetime | None = None
+) -> list[PolicyChunk]:
+    now = as_of or datetime.now(UTC)
+    selected: dict[str, PolicyChunk] = {}
+    for chunk in corpus.chunks:
+        if "*" not in chunk.tenant_ids and principal.tenant_id not in chunk.tenant_ids:
+            continue
+        if datetime.fromisoformat(chunk.effective_at) > now:
+            continue
+        if chunk.expires_at and datetime.fromisoformat(chunk.expires_at) <= now:
+            continue
+        key = chunk.rule_id or chunk.chunk_id
+        existing = selected.get(key)
+        rank = (
+            principal.tenant_id in chunk.tenant_ids,
+            datetime.fromisoformat(chunk.effective_at),
+            chunk.chunk_id,
+        )
+        if existing is None or rank > (
+            principal.tenant_id in existing.tenant_ids,
+            datetime.fromisoformat(existing.effective_at),
+            existing.chunk_id,
+        ):
+            selected[key] = chunk
+    return sorted(selected.values(), key=lambda chunk: chunk.chunk_id)
+
+
+def policy_citation(chunk: PolicyChunk) -> Citation:
+    return Citation(
+        source_id=chunk.source_id,
+        title=chunk.title,
+        chunk_id=chunk.chunk_id,
+        excerpt=chunk.content,
+        policy_version=chunk.version,
+        effective_at=chunk.effective_at,
     )
 
 
@@ -80,20 +128,10 @@ class LocalPolicyRetriever:
     ) -> list[Citation]:
         normalized_query = query.casefold()
         scored_chunks: list[tuple[int, PolicyChunk]] = []
-        for chunk in self.corpus.chunks:
-            if "*" not in chunk.tenant_ids and principal.tenant_id not in chunk.tenant_ids:
-                continue
+        for chunk in applicable_chunks(self.corpus, principal):
             score = sum(len(keyword) for keyword in chunk.keywords if keyword in normalized_query)
             if score > 0:
                 scored_chunks.append((score, chunk))
 
         scored_chunks.sort(key=lambda item: (-item[0], item[1].chunk_id))
-        return [
-            Citation(
-                source_id=chunk.source_id,
-                title=chunk.title,
-                chunk_id=chunk.chunk_id,
-                excerpt=chunk.content,
-            )
-            for _, chunk in scored_chunks[:limit]
-        ]
+        return [policy_citation(chunk) for _, chunk in scored_chunks[:limit]]

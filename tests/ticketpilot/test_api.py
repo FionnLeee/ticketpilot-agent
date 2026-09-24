@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -17,11 +18,14 @@ from ticketpilot.errors import ResourceNotFound
 from ticketpilot.schemas import (
     AddTicketMessageRequest,
     ApprovalDecisionRequest,
+    ApprovalListResponse,
     AuditEventView,
     CreateTicketRequest,
+    DashboardSummary,
     RequestPrincipal,
     RunEventsResponse,
     TicketDetail,
+    TicketListResponse,
     TicketMessageView,
     TicketRunResult,
     TicketSummary,
@@ -59,6 +63,33 @@ class FakeTicketService:
         self.decision_call = None
         self.message_call = None
         self.events_call = None
+        self.list_call = None
+        self.approvals_call = None
+        self.dashboard_call = None
+
+    async def list_tickets(
+        self, principal: RequestPrincipal, limit: int
+    ) -> TicketListResponse:
+        self.list_call = (principal, limit)
+        return TicketListResponse(items=[self.result.ticket])
+
+    async def list_approvals(
+        self, principal: RequestPrincipal, limit: int
+    ) -> ApprovalListResponse:
+        self.approvals_call = (principal, limit)
+        return ApprovalListResponse(items=[])
+
+    async def get_dashboard(self, principal: RequestPrincipal) -> DashboardSummary:
+        self.dashboard_call = principal
+        return DashboardSummary(
+            tenant_id=principal.tenant_id,
+            order_count=1,
+            customer_count=1,
+            ticket_count=1,
+            open_ticket_count=1,
+            refund_ticket_count=0,
+            contact_rate=Decimal("1"),
+        )
 
     async def create_ticket(
         self,
@@ -161,6 +192,45 @@ def test_create_ticket_uses_principal_from_token(monkeypatch) -> None:
     assert principal.actor_id == "customer-a"
     assert request.order_reference == "O-9527"
     assert key == "create-attempt-1"
+
+
+def test_read_models_use_authenticated_scope(monkeypatch) -> None:
+    fake_service = FakeTicketService(make_run_result())
+    client = build_client(fake_service, monkeypatch)
+    headers = {"Authorization": "Bearer customer-token"}
+
+    identity = client.get("/v1/me", headers=headers)
+    tickets = client.get("/v1/tickets?limit=12", headers=headers)
+    dashboard = client.get("/v1/dashboard/summary", headers=headers)
+
+    assert identity.status_code == 200
+    assert identity.json() == {
+        "tenant_id": "tenant-a",
+        "actor_id": "customer-a",
+        "role": "CUSTOMER",
+    }
+    assert tickets.status_code == 200
+    assert tickets.json()["items"][0]["id"] == str(fake_service.result.ticket.id)
+    assert fake_service.list_call[0].actor_id == "customer-a"
+    assert fake_service.list_call[1] == 12
+    assert dashboard.status_code == 200
+    assert dashboard.json()["tenant_id"] == "tenant-a"
+    assert fake_service.dashboard_call.actor_id == "customer-a"
+
+
+def test_approval_queue_uses_approver_scope(monkeypatch) -> None:
+    fake_service = FakeTicketService(make_run_result())
+    client = build_client(fake_service, monkeypatch)
+
+    response = client.get(
+        "/v1/approvals?limit=7",
+        headers={"Authorization": "Bearer approver-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+    assert fake_service.approvals_call[0].role is PrincipalRole.APPROVER
+    assert fake_service.approvals_call[1] == 7
 
 
 def test_create_ticket_requires_idempotency_key(monkeypatch) -> None:

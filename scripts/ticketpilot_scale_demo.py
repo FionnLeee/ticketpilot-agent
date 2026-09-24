@@ -72,13 +72,21 @@ async def run(args):
         ),
         "environment": {"platform": platform.platform(), "python": platform.python_version()},
         "method": "In-process TicketService + LangGraph + real PostgreSQL business/checkpoints; no HTTP, no LLM, no real payment. 20ms synthetic classify delay.",
-        "pool_max_each": 10,
+        "pool_max_each": args.pool_size,
         "phases": [],
     }
     async with (
-        AsyncConnectionPool(dsn, min_size=2, max_size=10, kwargs={"row_factory": dict_row}) as pool,
         AsyncConnectionPool(
-            dsn, min_size=2, max_size=10, kwargs={"row_factory": dict_row, "autocommit": True}
+            dsn,
+            min_size=min(2, args.pool_size),
+            max_size=args.pool_size,
+            kwargs={"row_factory": dict_row},
+        ) as pool,
+        AsyncConnectionPool(
+            dsn,
+            min_size=min(2, args.pool_size),
+            max_size=args.pool_size,
+            kwargs={"row_factory": dict_row, "autocommit": True},
         ) as saver_pool,
     ):
         await apply_migrations(pool)
@@ -214,11 +222,16 @@ async def run(args):
             print(json.dumps({k: v for k, v in result.items() if k != "rows"}), flush=True)
             return rows
 
-        for concurrency in (1, 10, 30):
+        for concurrency in args.concurrency_levels:
             rows = await phase(f"independent-{concurrency}", concurrency, args.requests)
             if any(row["status"] != "OK" or row["processing_result"] != "ANSWERED" for row in rows):
                 report.setdefault("failures", []).append(f"independent-{concurrency}")
-        rows = await phase("same-request", 30, 30, same_key=True)
+        rows = await phase(
+            "same-request",
+            args.idempotency_concurrency,
+            args.idempotency_concurrency,
+            same_key=True,
+        )
         ids = {row["ticket_id"] for row in rows if row["status"] == "OK"}
         runs = {row["run_id"] for row in rows if row["status"] == "OK"}
         async with pool.connection() as connection:
@@ -264,7 +277,9 @@ async def run(args):
             except Exception as exc:
                 return type(exc).__name__
 
-        statuses = await asyncio.gather(*(approve() for _ in range(30)))
+        statuses = await asyncio.gather(
+            *(approve() for _ in range(args.idempotency_concurrency))
+        )
         async with pool.connection() as connection:
             cursor = await connection.execute(
                 "SELECT refundable_amount FROM ticketpilot.orders WHERE id = %s", (order.id,)
@@ -277,7 +292,7 @@ async def run(args):
             )
             executions = (await cursor.fetchone())["n"]
         report["concurrent_approval"] = {
-            "requests": 30,
+            "requests": args.idempotency_concurrency,
             "status_counts": {s: statuses.count(s) for s in set(statuses)},
             "before": str(before),
             "after": str(after),
@@ -307,13 +322,30 @@ async def run(args):
 
 
 if __name__ == "__main__":
+    def concurrency_levels(value: str) -> tuple[int, ...]:
+        try:
+            levels = tuple(int(item) for item in value.split(","))
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError("levels must be comma-separated integers") from exc
+        if not levels or any(level < 1 or level > 500 for level in levels):
+            raise argparse.ArgumentTypeError("levels must be between 1 and 500")
+        return levels
+
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--requests", type=int, default=100)
+    parser.add_argument("--concurrency-levels", type=concurrency_levels, default=(1, 10, 30, 100))
+    parser.add_argument("--idempotency-concurrency", type=int, default=100)
+    parser.add_argument("--pool-size", type=int, default=20)
     arguments = parser.parse_args()
     if not 30 <= arguments.requests <= 1000:
         parser.error("--requests must be between 30 and 1000")
+    if not 2 <= arguments.idempotency_concurrency <= 500:
+        parser.error("--idempotency-concurrency must be between 2 and 500")
+    if not 2 <= arguments.pool_size <= 100:
+        parser.error("--pool-size must be between 2 and 100")
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(run(arguments))

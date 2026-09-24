@@ -1,0 +1,17 @@
+services:
+  ticketpilot_redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  agent_service:
+    environment:
+      TICKETPILOT_REDIS_URL: redis://ticketpilot_redis:6379/0
+    depends_on:
+      ticketpilot_redis:
+        condition: service_started

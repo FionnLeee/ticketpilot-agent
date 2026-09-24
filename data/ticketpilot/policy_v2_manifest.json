@@ -1,0 +1,10 @@
+{
+  "dataset_id": "ticketpilot-policy-v2",
+  "schema_version": 2,
+  "corpus_path": "policies/after_sales_policy_v2.json",
+  "corpus_sha256": "c439eb16a7fa0bd700c5218de6e6466d9c5d0d8ed263212e18bf0dddd3fc88b7",
+  "chunk_count": 163,
+  "effective_at": "2026-09-01T00:00:00+00:00",
+  "provenance": "First-party fictional merchant policy; authored for engineering evaluation.",
+  "contains_real_personal_data": false
+}

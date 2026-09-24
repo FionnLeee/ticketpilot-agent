@@ -58,6 +58,12 @@ dependencies = [
     "langchain-mcp-adapters>=0.3.0",
     "ddgs>=9.14.4",
     "ag-ui-langgraph~=0.0.42",
+    "redis>=6.4,<9",
+]
+
+[project.optional-dependencies]
+retrieval = [
+    "fastembed>=0.7,<1",
 ]
 
 # Supply-chain cooldown: resolution only considers releases >=14 days old. Needs the

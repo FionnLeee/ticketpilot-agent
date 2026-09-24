@@ -21,6 +21,7 @@ from ticketpilot.domain import (
     RiskLevel,
     TicketCategory,
 )
+from ticketpilot.observability import ExecutionLimitExceeded, InvalidCitation, ModelCallFailed
 from ticketpilot.reasoning import ORDER_REFERENCE_PATTERN, TicketReasoner
 from ticketpilot.schemas import Citation, TicketClassification
 from ticketpilot.tools import TicketPilotContext, query_order, search_policy
@@ -233,7 +234,7 @@ def prepare_policy_call(state: TicketAgentState) -> dict[str, Any]:
                 tool_calls=[
                     {
                         "name": search_policy.name,
-                        "args": {"query": state["customer_message"]},
+                        "args": {"query": state["customer_message"][:1000]},
                         "id": f"search-policy-{state['run_id']}",
                         "type": "tool_call",
                     }
@@ -261,6 +262,9 @@ async def capture_policy_result(
         details={
             "evidence_count": len(result.get("evidence", [])),
             "error_code": error_code,
+            "citation_ids": [item.get("chunk_id") for item in result.get("evidence", [])],
+            **(runtime.context.policy_retriever.metadata()
+               if hasattr(runtime.context.policy_retriever, "metadata") else {}),
         },
     )
     return {"policy_result": result}
@@ -400,9 +404,20 @@ async def generate_grounded_answer(
             "result_error_code": "NO_RELEVANT_POLICY",
             "messages": [AIMessage(content=answer)],
         }
-    answer = await runtime.context.reasoner.answer(
-        state["customer_message"], classification, order_result or None, evidence, config
-    )
+    try:
+        answer = await runtime.context.reasoner.answer(
+            state["customer_message"], classification, order_result or None, evidence, config
+        )
+    except (InvalidCitation, ModelCallFailed, ExecutionLimitExceeded) as exc:
+        answer = "本轮回答未通过依据校验或生成服务不可用，请转人工核查；没有执行退款。"
+        return {
+            "final_answer": answer,
+            "processing_result": (ProcessingResult.INSUFFICIENT_EVIDENCE.value
+                                  if isinstance(exc, InvalidCitation)
+                                  else ProcessingResult.DEPENDENCY_FAILED.value),
+            "result_error_code": type(exc).__name__,
+            "messages": [AIMessage(content=answer)],
+        }
     return {
         "final_answer": answer,
         "processing_result": ProcessingResult.ANSWERED.value,

@@ -6,7 +6,7 @@ LangGraph -> AG-UI event translation is handled by the official `ag-ui-langgraph
 package; this module only wires it into the service's agent registry, auth, and
 tracing.
 
-See docs/AGUI.md for usage, including how to connect a client.
+The AG-UI route is available only in the upstream-compatible generic mode.
 """
 
 import logging

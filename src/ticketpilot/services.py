@@ -1,13 +1,24 @@
+import asyncio
+import json
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-from ticketpilot.domain import PrincipalRole
+from ticketpilot.domain import PrincipalRole, ProcessingResult
 from ticketpilot.errors import Forbidden, ResourceNotFound, TicketPilotUnavailable
 from ticketpilot.graph import TicketGraphContext
+from ticketpilot.observability import (
+    ExecutionLimitExceeded,
+    ExecutionLimits,
+    ModelCallFailed,
+    RunTelemetry,
+    current_run,
+)
 from ticketpilot.orders import OrderReader
+from ticketpilot.paths import find_ancestor_path
 from ticketpilot.policies import PolicyRetriever
 from ticketpilot.privacy import mask_tracking_number
 from ticketpilot.reasoning import TicketReasoner
@@ -15,13 +26,18 @@ from ticketpilot.repositories import CreatedTicket, TicketRepository
 from ticketpilot.schemas import (
     AddTicketMessageRequest,
     ApprovalDecisionRequest,
+    ApprovalListResponse,
+    ApprovalQueueItem,
     ApprovalSummary,
     AuditEventView,
     CreateTicketRequest,
+    DashboardSummary,
+    DatasetEvidence,
     OrderSummary,
     RequestPrincipal,
     RunEventsResponse,
     TicketDetail,
+    TicketListResponse,
     TicketMessageView,
     TicketRunResult,
     TicketSummary,
@@ -51,6 +67,7 @@ class TicketService:
         order_reader: OrderReader | None = None,
         policy_retriever: PolicyRetriever | None = None,
         reasoner: TicketReasoner | None = None,
+        execution_limits: ExecutionLimits | None = None,
     ) -> None:
         self.repository = repository
         self.workflow = workflow
@@ -58,6 +75,7 @@ class TicketService:
         self.order_reader = order_reader
         self.policy_retriever = policy_retriever
         self.reasoner = reasoner
+        self.execution_limits = execution_limits or ExecutionLimits()
 
     async def _invoke_owned(
         self,
@@ -72,11 +90,21 @@ class TicketService:
         if workflow is None:
             raise TicketPilotUnavailable
         await self.repository.claim_run(principal.tenant_id, ticket_id, run_id)
+        telemetry = RunTelemetry(str(run_id), self.execution_limits)
+        token = current_run.set(telemetry)
         try:
-            await workflow.ainvoke(
-                graph_input,
-                config=RunnableConfig(configurable={"thread_id": thread_id}),
-                context=context,
+            async with asyncio.timeout(self.execution_limits.deadline_seconds):
+                await workflow.ainvoke(
+                    graph_input,
+                    config=RunnableConfig(configurable={"thread_id": thread_id}),
+                    context=context,
+                )
+            return await self._run_result(principal, ticket_id, run_id)
+        except (ModelCallFailed, ExecutionLimitExceeded) as exc:
+            await context.workflow_repository.record_unsuccessful_result(
+                principal.tenant_id, ticket_id, run_id,
+                "模型服务暂时不可用或本轮执行预算已用尽，请稍后重新提交或转人工核查。",
+                ProcessingResult.DEPENDENCY_FAILED, type(exc).__name__,
             )
             return await self._run_result(principal, ticket_id, run_id)
         except BaseException as exc:
@@ -88,7 +116,14 @@ class TicketService:
             )
             raise
         finally:
-            await self.repository.release_run(principal.tenant_id, ticket_id, run_id)
+            current_run.reset(token)
+            try:
+                await context.workflow_repository.record_runtime_events(
+                    principal.tenant_id, ticket_id, run_id,
+                    telemetry.events, telemetry.summary(),
+                )
+            finally:
+                await self.repository.release_run(principal.tenant_id, ticket_id, run_id)
 
     async def create_ticket(
         self,
@@ -190,6 +225,83 @@ class TicketService:
             pending_approval=(
                 ApprovalSummary.model_validate(pending_approval) if pending_approval else None
             ),
+        )
+
+    async def list_tickets(
+        self, principal: RequestPrincipal, limit: int = 40
+    ) -> TicketListResponse:
+        if principal.role not in READ_TICKET_ROLES:
+            raise Forbidden
+        rows = await self.repository.list_tickets(principal, limit)
+        return TicketListResponse(
+            items=[TicketSummary(**self._ticket_summary_data(row)) for row in rows]
+        )
+
+    async def list_approvals(
+        self, principal: RequestPrincipal, limit: int = 40
+    ) -> ApprovalListResponse:
+        if principal.role not in {
+            PrincipalRole.APPROVER,
+            PrincipalRole.STAFF,
+            PrincipalRole.ADMIN,
+        }:
+            raise Forbidden
+        rows = await self.repository.list_approvals(principal.tenant_id, limit)
+        return ApprovalListResponse(items=[ApprovalQueueItem.model_validate(row) for row in rows])
+
+    async def get_dashboard(self, principal: RequestPrincipal) -> DashboardSummary:
+        if principal.role not in READ_TICKET_ROLES:
+            raise Forbidden
+        data = await self.repository.dashboard_summary(principal.tenant_id)
+        tenant = data["tenant"] or {}
+        datasets = []
+        for row in data["datasets"]:
+            counts = {
+                key: int(value)
+                for key, value in row["row_counts"].items()
+                if key != "total"
+            }
+            datasets.append(
+                DatasetEvidence(
+                    dataset_id=row["dataset_id"],
+                    loaded_at=row["loaded_at"],
+                    evidence_source="POSTGRES_REGISTRY",
+                    row_counts=counts,
+                    total_rows=int(row["row_counts"].get("total", sum(counts.values()))),
+                )
+            )
+        if not datasets:
+            benchmark_path = find_ancestor_path(
+                Path(__file__), "data", "ticketpilot", "history_benchmark.json"
+            )
+            if benchmark_path.exists():
+                benchmark = json.loads(benchmark_path.read_text(encoding="utf-8"))
+                counts = {
+                    key: int(value)
+                    for key, value in benchmark["row_counts"].items()
+                    if key != "total"
+                }
+                datasets.append(
+                    DatasetEvidence(
+                        dataset_id=benchmark["dataset_id"],
+                        loaded_at=benchmark["measured_at"],
+                        evidence_source="VERSIONED_BENCHMARK",
+                        row_counts=counts,
+                        total_rows=int(benchmark["row_counts"]["total"]),
+                    )
+                )
+        return DashboardSummary(
+            tenant_id=principal.tenant_id,
+            order_count=tenant.get("order_count", 0),
+            customer_count=tenant.get("customer_count", 0),
+            ticket_count=tenant.get("ticket_count", 0),
+            open_ticket_count=tenant.get("open_ticket_count", 0),
+            refund_ticket_count=tenant.get("refund_ticket_count", 0),
+            contact_rate=tenant.get("contact_rate", 0),
+            avg_resolution_minutes=tenant.get("avg_resolution_minutes"),
+            datasets=datasets,
+            daily_volume=data["daily_volume"],
+            refund_funnel=data["refund_funnel"],
         )
 
     async def get_run_events(self, principal: RequestPrincipal, run_id: UUID) -> RunEventsResponse:

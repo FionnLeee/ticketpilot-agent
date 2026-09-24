@@ -25,6 +25,8 @@ services:
       - .env
     environment:
       - POSTGRES_HOST=postgres
+      - TICKETPILOT_RETRIEVAL_STRATEGY=${TICKETPILOT_RETRIEVAL_STRATEGY:-rerank}
+      - TICKETPILOT_MODEL_CACHE=/model-cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +38,7 @@ services:
     # Volume mount of development-only credentials since compose watch doesn't sync ignored files and doesn't do initial sync when the service starts
     volumes:
       - ./privatecredentials:/privatecredentials
+      - ticketpilot_model_cache:/model-cache
     develop:
       watch:
         - path: src/agents/
@@ -94,3 +97,4 @@ services:
 
 volumes:
   postgres_data:
+  ticketpilot_model_cache:
