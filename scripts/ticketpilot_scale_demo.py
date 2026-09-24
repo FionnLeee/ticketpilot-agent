@@ -277,9 +277,7 @@ async def run(args):
             except Exception as exc:
                 return type(exc).__name__
 
-        statuses = await asyncio.gather(
-            *(approve() for _ in range(args.idempotency_concurrency))
-        )
+        statuses = await asyncio.gather(*(approve() for _ in range(args.idempotency_concurrency)))
         async with pool.connection() as connection:
             cursor = await connection.execute(
                 "SELECT refundable_amount FROM ticketpilot.orders WHERE id = %s", (order.id,)
@@ -322,6 +320,7 @@ async def run(args):
 
 
 if __name__ == "__main__":
+
     def concurrency_levels(value: str) -> tuple[int, ...]:
         try:
             levels = tuple(int(item) for item in value.split(","))
@@ -330,7 +329,6 @@ if __name__ == "__main__":
         if not levels or any(level < 1 or level > 500 for level in levels):
             raise argparse.ArgumentTypeError("levels must be between 1 and 500")
         return levels
-
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")

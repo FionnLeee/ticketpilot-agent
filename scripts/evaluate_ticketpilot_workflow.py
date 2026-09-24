@@ -271,7 +271,8 @@ async def run(args, manifest):
                     first_run = result.run_id
                     initial_events = await service.get_run_events(principal, first_run)
                     row["initial_telemetry"] = [
-                        e.details for e in initial_events.events
+                        e.details
+                        for e in initial_events.events
                         if e.event_type in {"MODEL_CALL", "RUN_TELEMETRY"} or e.tool_name
                     ]
                     row.update(

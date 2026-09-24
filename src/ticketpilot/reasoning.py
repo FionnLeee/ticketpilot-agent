@@ -30,7 +30,10 @@ def controlled_model(model: Any) -> Any:
         key = (id(model), run.limits.max_output_tokens if run else 1200)
         if key in CONTROLLED_MODELS:
             return CONTROLLED_MODELS[key]
-        updates: dict[str, Any] = {"max_retries": 0, "max_tokens": run.limits.max_output_tokens if run else 1200}
+        updates: dict[str, Any] = {
+            "max_retries": 0,
+            "max_tokens": run.limits.max_output_tokens if run else 1200,
+        }
         if isinstance(model, ChatOpenAI):
             updates["streaming"] = False
             updates["root_client"] = model.root_client.with_options(max_retries=0)
@@ -40,7 +43,10 @@ def controlled_model(model: Any) -> Any:
             if model.model_name.casefold().startswith("qwen"):
                 updates["extra_body"] = {**(model.extra_body or {}), "enable_thinking": False}
             elif model.model_name.casefold().startswith("deepseek"):
-                updates["extra_body"] = {**(model.extra_body or {}), "thinking": {"type": "disabled"}}
+                updates["extra_body"] = {
+                    **(model.extra_body or {}),
+                    "thinking": {"type": "disabled"},
+                }
         # Retain SDK wrappers: destroying a temporary wrapper can close its shared HTTP pool.
         CONTROLLED_MODELS[key] = model.model_copy(update=updates)
         return CONTROLLED_MODELS[key]
@@ -192,9 +198,13 @@ class LangChainTicketReasoner:
                 "remaining refundable money; false for partial, policy-only, negated or cancelled."
             )
             runnable = cast(ChatOpenAI, model).with_structured_output(
-                wire_schema, method=("function_calling" if isinstance(model, ChatOpenAI)
-                                     and model.model_name.casefold().startswith("deepseek")
-                                     else "json_schema")
+                wire_schema,
+                method=(
+                    "function_calling"
+                    if isinstance(model, ChatOpenAI)
+                    and model.model_name.casefold().startswith("deepseek")
+                    else "json_schema"
+                ),
             )
         else:
             runnable = model.with_structured_output(TicketClassification)
