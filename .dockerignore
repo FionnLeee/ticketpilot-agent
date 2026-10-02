@@ -63,6 +63,11 @@ data/ticketpilot/**/*report*.json
 data/ticketpilot/evals/productionization_*
 **/.venv
 **/.venvs
+**/.direnv
+**/.pytest_cache
+**/.ruff_cache
+test-results
+playwright-report
 **/privatecredentials
 **/.aws
 **/.ssh
