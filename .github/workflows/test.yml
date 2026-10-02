@@ -73,7 +73,7 @@ jobs:
         UV_SYSTEM_PYTHON: 1
     - name: Lint markdown with pymarkdown
       run: |
-        uv run pymarkdown scan README.md docs/
+        uv run pymarkdown scan README.md README.zh-CN.md
 
   test-docker:
     runs-on: ubuntu-latest

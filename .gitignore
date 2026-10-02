@@ -200,18 +200,73 @@ smoke_live_app_failure.png
 # Claude Code agent worktrees (ephemeral, per-agent git checkouts)
 .claude/worktrees/
 
-# Keep only public architecture and contribution attribution in Git.
+# Keep project guidance and learning material local; publish the READMEs only.
 /CLAUDE.md
 /.claude/
-/docs/*
-!/docs/ARCHITECTURE.md
-!/docs/CONTRIBUTION_MAP.md
-/docs/adr/
-/docs/maintenance/
+/docs/
+*.md
+!/README.md
+!/README.zh-CN.md
 
 # Evaluation inputs remain reproducible; local reports and run output stay private.
-/data/ticketpilot/benchmarks/*.json
-/data/ticketpilot/evals/README.md
-/data/ticketpilot/evals/*results*.json
+/data/ticketpilot/benchmarks/
+/data/ticketpilot/**/*benchmark*.json
+/data/ticketpilot/**/*results*.json
+/data/ticketpilot/**/*report*.json
 /data/ticketpilot/evals/productionization_*/
-/data/ticketpilot/evals/*report*.json
+
+# Only sanitized environment templates may be versioned.
+.env*
+!.env.example
+.envrc
+.direnv/
+.venvs/
+
+# Credentials, private keys and database snapshots.
+credentials/
+secrets/
+credentials.*
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+.aws/
+.ssh/
+.npmrc
+.pypirc
+.netrc
+.git-credentials
+service-account*.json
+service_account*.json
+*.sqlite
+*.db-*
+*.sqlite3-*
+*.dump
+
+# Local notes, reports, evaluation artifacts and office documents.
+/.codex/
+/.planning/
+/notes/
+/learning/
+/study/
+/interview/
+/outputs/
+/runtime/
+/artifacts/
+/reports/
+/logs/
+/tmp/
+/temp/
+/test-results/
+/playwright-report/
+*.doc
+*.ppt
+*.pptx
+*.odt
+*.rtf
+*.ipynb

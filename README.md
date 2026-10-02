@@ -100,7 +100,13 @@ sequenceDiagram
 | Evaluation | — | 120-case Chinese diagnostic set, bounded-concurrency runner, Wilson interval, per-scenario metrics, confusion matrix and reproducible real-model reports |
 | Demo | generic chat page | React/TypeScript operations console and Execution Runway; Streamlit retained as an internal workbench; API and browser golden paths |
 
-See [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md) for the contribution boundary and [`UPSTREAM.md`](UPSTREAM.md) for provenance. Upstream capabilities are not claimed as my own work.
+The audited upstream commit is `0c58abfce18ba97d10507f0ffd0b151d5a843e74` (adopted on 2026-08-26; local baseline import `e20d288`). The original MIT copyright notice remains in [`LICENSE`](LICENSE). TicketPilot is maintained as an independent repository; upstream updates are reviewed separately, and upstream capabilities are not claimed as my own work.
+
+## Repository contents and local files
+
+Git contains source, tests, migrations, sanitized `.env.example` templates, first-party synthetic policy/evaluation inputs and the two READMEs. Learning notes, design documents, interview material, PDFs, benchmark reports, model outputs and run artifacts stay local. `.gitignore` excludes them from commits; `.dockerignore` also excludes private material from the Docker build context. Real `.env` files, environment variants, credentials, private keys and database snapshots must remain local; template values are placeholders, not deployment credentials.
+
+Historical load and evaluation figures below summarize local experiments; their raw reports are not bundled with a fresh clone. The dashboard reads loaded dataset evidence from PostgreSQL; without a registered dataset or the optional local `history_benchmark.json`, it does not populate historical dataset figures. The upstream generic RAG example likewise needs a locally supplied document and index. Files removed from tracking are retained on the maintainer's machine; ignore rules do not erase copies from older Git commits.
 
 ## Reliability work, with evidence
 
@@ -191,7 +197,6 @@ migrations/ticketpilot/      versioned SQL migrations 0001–0008
 data/ticketpilot/            synthetic order/history manifests, policy corpus, classification eval sets
 scripts/                     API/browser acceptance, million-history load, scale/concurrency and real-model evaluation
 tests/ticketpilot/           API, isolation, repository, run ownership, refund semantics, graph and scorer tests
-docs/                        public architecture and contribution attribution only
 ```
 
 ## Upstream toolkit and generic mode
@@ -207,4 +212,4 @@ docker compose watch                      # or: full stack with live reload
 
 ## License
 
-MIT, with the upstream copyright notice retained; see [`LICENSE`](LICENSE) and [`UPSTREAM.md`](UPSTREAM.md). All demo data is synthetic.
+MIT, with the upstream copyright notice retained in [`LICENSE`](LICENSE). Upstream provenance and contribution boundaries are recorded above. All demo data is synthetic.
