@@ -101,7 +101,13 @@ sequenceDiagram
 | 评测 | — | 18 + 6 条开发/迁移样本，以及 120 条困难中文评测集；精确匹配、分类别 F1、混淆矩阵、Wilson 区间和延迟分位数 |
 | 演示 | 通用聊天页 | React/TypeScript 运营控制台与 Execution Runway；Streamlit 保留为内部调试台；API 与浏览器黄金链路脚本 |
 
-完整归属见 [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md)，来源与许可见 [`UPSTREAM.md`](UPSTREAM.md)。上游能力不是本人从零实现。
+上游核对版本为 `0c58abfce18ba97d10507f0ffd0b151d5a843e74`，于 2026-08-26 引入，本地基线导入提交为 `e20d288`。[`LICENSE`](LICENSE) 保留原 MIT 版权声明。TicketPilot 作为独立仓库维护，上游更新单独评估；上游能力不是本人从零实现。
+
+## 代码归档与本地文件
+
+Git 只归档源码、测试、迁移、脱敏 `.env.example` 模板、自建合成政策与评测输入，以及中英文 README。学习笔记、设计文档、面试材料、PDF、压测报告、模型输出和运行工件仅保存在本地；`.gitignore` 排除提交，`.dockerignore` 同时排除 Docker 构建上下文中的私有材料。真实 `.env`、各环境变体、凭据、私钥和数据库快照不入库，模板中的示例值不能当作部署凭据。
+
+下文的历史装载和评测数字是本地实验汇总，新克隆不包含原始报告。看板优先读取 PostgreSQL 中的装载登记；没有登记数据或可选的本地 `history_benchmark.json` 时，不填充历史数据集数字。上游通用 RAG 示例同样需要自行提供本地文档和索引。取消跟踪的文件仍留在维护者本机；忽略规则不会删除旧 Git 提交中的副本。
 
 ## 可靠性设计：五个被验证过的问题
 
@@ -204,14 +210,7 @@ migrations/ticketpilot/     0001–0008 版本化 SQL 迁移
 data/ticketpilot/           合成订单/历史 manifest、政策语料、分类评测集
 scripts/                    API/浏览器验收、百万历史装载、规模并发与真实模型评测脚本
 tests/ticketpilot/          API、隔离、仓储、并发归属、退款语义、graph、评测器测试
-docs/                       公开架构与贡献归属说明
 ```
-
-## 文档
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：架构原则、状态机、数据模型、审批与恢复设计
-- [`docs/CONTRIBUTION_MAP.md`](docs/CONTRIBUTION_MAP.md)：上游能力 / 个人贡献 / 明确不做
-- [`UPSTREAM.md`](UPSTREAM.md)：上游来源与许可证边界
 
 ## 上游工具包与通用模式
 
@@ -228,4 +227,4 @@ docker compose watch                      # 或者：全容器 + 源码热更新
 
 ## 许可证
 
-MIT，保留上游原始版权声明，见 [`LICENSE`](LICENSE) 与 [`UPSTREAM.md`](UPSTREAM.md)。所有演示数据均为合成数据，不含真实客户信息。
+MIT，原始版权声明保留在 [`LICENSE`](LICENSE)，上游来源与贡献边界见上文。所有演示数据均为合成数据，不含真实客户信息。
