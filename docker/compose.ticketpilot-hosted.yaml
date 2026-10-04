@@ -1,0 +1,100 @@
+name: ticketpilot-hosted
+
+x-business-env: &business-env
+  DATABASE_TYPE: postgres
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: ticketpilot
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a unique database password}
+  POSTGRES_DB: ticketpilot
+  USE_FAKE_MODEL: "true"
+  DEFAULT_MODEL: fake
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ticketpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a unique database password}
+      POSTGRES_DB: ticketpilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U ticketpilot -d ticketpilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ticketpilot_seed:
+    image: ${TICKETPILOT_IMAGE_PREFIX:-ticketpilot}-service:${APP_VERSION:-local}
+    pull_policy: never
+    environment: *business-env
+    command: [python, seed_ticketpilot_data.py]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  agent_service:
+    image: ${TICKETPILOT_IMAGE_PREFIX:-ticketpilot}-service:${APP_VERSION:-local}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+    restart: unless-stopped
+    environment:
+      <<: *business-env
+      TICKETPILOT_ENABLED: "true"
+      TICKETPILOT_REASONER_MODE: deterministic_demo
+      TICKETPILOT_RETRIEVAL_STRATEGY: bm25
+      TICKETPILOT_AUTH_TOKENS: >-
+        {"demo-customer-token":{"tenant_id":"tenant-demo-01","actor_id":"customer-demo-01","role":"CUSTOMER"},"demo-approver-token":{"tenant_id":"tenant-demo-01","actor_id":"approver-demo-01","role":"APPROVER"}}
+    depends_on:
+      ticketpilot_seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    stop_grace_period: 40s
+
+  ticketpilot_web:
+    image: ${TICKETPILOT_IMAGE_PREFIX:-ticketpilot}-web:${APP_VERSION:-local}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        VITE_TICKETPILOT_AUTH_MODE: gateway
+    restart: unless-stopped
+    depends_on:
+      agent_service:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, --spider, "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      TICKETPILOT_DOMAIN: ${TICKETPILOT_DOMAIN:?set the public DNS hostname}
+      DEMO_USERNAME: ${DEMO_USERNAME:-demo}
+      DEMO_PASSWORD_HASH: ${DEMO_PASSWORD_HASH:?set a caddy hash-password result}
+    ports:
+      - "${GATEWAY_BIND:-0.0.0.0}:${HTTP_PORT:-80}:80"
+      - "${GATEWAY_BIND:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile.ticketpilot:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      ticketpilot_web:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

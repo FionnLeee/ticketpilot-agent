@@ -1,0 +1,24 @@
+{$TICKETPILOT_DOMAIN} {
+    encode zstd gzip
+    header X-Content-Type-Options nosniff
+
+    route {
+        basic_auth {
+            {$DEMO_USERNAME} {$DEMO_PASSWORD_HASH}
+        }
+        @approver {
+            path /api/*
+            header X-TicketPilot-Identity approver
+        }
+        reverse_proxy @approver ticketpilot_web:80 {
+            header_up Authorization "Bearer demo-approver-token"
+        }
+        @api path /api/*
+        reverse_proxy @api ticketpilot_web:80 {
+            header_up Authorization "Bearer demo-customer-token"
+        }
+        reverse_proxy ticketpilot_web:80 {
+            header_up -Authorization
+        }
+    }
+}

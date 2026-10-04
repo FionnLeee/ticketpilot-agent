@@ -191,13 +191,31 @@ uv run --with playwright python scripts/ticketpilot_ui_e2e.py      # 浏览器�
 ## 测试与验证
 
 ```sh
-uv sync --frozen
+uv sync --frozen --extra retrieval
 uv run pytest                                  # 默认：不依赖 PostgreSQL
 uv run pytest tests/ticketpilot --run-docker   # 需要 compose 里的 PostgreSQL
 uv run ruff check src tests scripts
 ```
 
 2026-09-15 在 Windows 11 / Python 3.12 上的结果：默认全量 `297 passed, 39 skipped`；PostgreSQL 专项 `114 passed`；服务隔离专项 6 passed；React 浏览器验收控制台 0 错误、390px 无横向溢出，同 key 重试返回相同 ticket/run。数字来自有重叠的不同测试集合，不能相加。
+
+## CI 与私有线上演示
+
+GitHub Actions 检查 Python 3.12–3.14、格式、类型、两份 README、React 构建和前端测试。独立 PostgreSQL 作业在隔离数据库运行业务测试，覆盖多个实例首次启动的迁移初始化；上游通用 Docker 集成测试单独保留。
+
+在专用 Linux Docker 主机部署带密码的面试演示：
+
+```sh
+cp .env.example .env.hosted
+docker run --rm -it caddy:2-alpine caddy hash-password
+# 编辑 .env.hosted：独立 POSTGRES_PASSWORD、TICKETPILOT_DOMAIN、
+# DEMO_USERNAME 和 DEMO_PASSWORD_HASH='包含所有美元符号的完整哈希'。
+docker compose --env-file .env.hosted -f docker/compose.ticketpilot-hosted.yaml up -d --build --wait --wait-timeout 180
+```
+
+域名 DNS 指向主机，开放 80/443。Caddy 自动管理 HTTPS，页面和 API 都需要演示账户登录。仅网关发布主机端口，PostgreSQL 和 FastAPI 留在 Compose 网络，不部署内部 Streamlit 工作台。前端 gateway 模式保留浏览器登录，由网关选择两个合成演示身份之一。固定使用确定性 reasoner、BM25 和合成订单，不向容器传入模型凭据。这是共享的私有演示环境；真实客户认证和真实支付仍需另行实现。
+
+手动触发 **Release images** 工作流，仅允许 CI 已成功的 `main` 提交发布 GHCR 镜像，标签固定为 `sha-<完整 commit>`。使用镜像时，在 `.env.hosted` 设置 `TICKETPILOT_IMAGE_PREFIX=ghcr.io/fionnleee/ticketpilot` 和 `APP_VERSION=sha-<完整 commit>`；私有包先完成 Docker 的 GHCR 登录，然后执行 `docker compose --env-file .env.hosted -f docker/compose.ticketpilot-hosted.yaml pull`，再执行 `up -d --no-build --wait`。保留上一版镜像标签用于回滚，保留数据库和证书命名卷，升级前备份 PostgreSQL，不对需保留的数据执行 `down -v`。旧镜像不保证兼容新版数据库结构。
 
 ## 目录
 

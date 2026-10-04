@@ -107,6 +107,7 @@ export type Dashboard = {
 };
 
 const API_BASE = import.meta.env.VITE_TICKETPILOT_API_BASE ?? "/api";
+const GATEWAY_AUTH = import.meta.env.VITE_TICKETPILOT_AUTH_MODE === "gateway";
 const TOKENS: Record<IdentityMode, string> = {
   customer: import.meta.env.VITE_TICKETPILOT_CUSTOMER_TOKEN ?? "demo-customer-token",
   approver: import.meta.env.VITE_TICKETPILOT_APPROVER_TOKEN ?? "demo-approver-token",
@@ -126,7 +127,9 @@ async function request<T>(mode: IdentityMode, path: string, init?: RequestInit):
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${TOKENS[mode]}`,
+      ...(GATEWAY_AUTH
+        ? { "X-TicketPilot-Identity": mode }
+        : { Authorization: `Bearer ${TOKENS[mode]}` }),
       "Content-Type": "application/json",
       ...init?.headers,
     },

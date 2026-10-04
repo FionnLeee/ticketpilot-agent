@@ -178,13 +178,31 @@ The responsive React console is the interview-facing product surface; the existi
 ## Tests
 
 ```sh
-uv sync --frozen
+uv sync --frozen --extra retrieval
 uv run pytest                                  # default: no PostgreSQL required
 uv run pytest tests/ticketpilot --run-docker   # needs the compose PostgreSQL
 uv run ruff check src tests scripts
 ```
 
 Results on 2026-09-15, Windows 11 / Python 3.12: default suite `297 passed, 39 skipped`; PostgreSQL-backed TicketPilot suite `114 passed`; service isolation 6 passed; the React browser check has zero console errors, a 390 px no-overflow viewport and a same-key retry returning the same ticket/run. The selections overlap and must not be summed.
+
+## CI and private hosted demo
+
+GitHub Actions checks Python 3.12–3.14, formatting, types, both READMEs, the React build and frontend tests. A separate PostgreSQL job exercises the business tests against an isolated database, including concurrent first-start migration initialization. The generic upstream Docker integration remains a separate check.
+
+For a password-protected interview demo on a dedicated Linux Docker host:
+
+```sh
+cp .env.example .env.hosted
+docker run --rm -it caddy:2-alpine caddy hash-password
+# Edit .env.hosted: unique POSTGRES_PASSWORD, TICKETPILOT_DOMAIN,
+# DEMO_USERNAME and DEMO_PASSWORD_HASH='the complete hash including dollar signs'.
+docker compose --env-file .env.hosted -f docker/compose.ticketpilot-hosted.yaml up -d --build --wait --wait-timeout 180
+```
+
+Point the domain's DNS at the host and open ports 80/443. Caddy manages HTTPS and requires the demo login for pages and API calls. Only the gateway publishes host ports; PostgreSQL and FastAPI stay on the Compose network, and the internal Streamlit workbench is omitted. The frontend's gateway mode preserves browser login while the gateway selects one of the two synthetic demo identities. The stack always uses the deterministic reasoner and BM25 with synthetic orders, and receives no model credentials. This is a shared private demonstration, not customer authentication or a real-payment deployment.
+
+The manually dispatched **Release images** workflow accepts only `main` commits with successful CI and publishes `ticketpilot-service` and `ticketpilot-web` images to GHCR as `sha-<full commit>`. To use them, set `TICKETPILOT_IMAGE_PREFIX=ghcr.io/fionnleee/ticketpilot` and `APP_VERSION=sha-<full commit>` in `.env.hosted`, authenticate Docker to GHCR if the packages are private, then run `docker compose --env-file .env.hosted -f docker/compose.ticketpilot-hosted.yaml pull` followed by `up -d --no-build --wait`. Keep the previous image tag for rollback. Preserve the named database and certificate volumes; back up PostgreSQL before upgrades, and do not use `down -v` on retained data. Older images are not guaranteed to support a newer database schema.
 
 ## Layout
 
