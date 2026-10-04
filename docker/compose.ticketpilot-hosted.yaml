@@ -28,9 +28,7 @@ services:
 
   ticketpilot_seed:
     image: ${TICKETPILOT_IMAGE_PREFIX:-ticketpilot}-service:${APP_VERSION:-local}
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.service
+    pull_policy: never
     environment: *business-env
     command: [python, seed_ticketpilot_data.py]
     depends_on:
