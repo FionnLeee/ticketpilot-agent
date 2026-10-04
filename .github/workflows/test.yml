@@ -244,7 +244,7 @@ jobs:
           password=$(openssl rand -hex 24)
           echo "::add-mask::$password"
           echo "DEMO_PASSWORD=$password" >> "$GITHUB_ENV"
-          hash=$(printf '%s' "$password" | docker run --rm -i caddy:2-alpine caddy hash-password)
+          hash=$(printf '%s\n' "$password" | docker run --rm -i caddy:2-alpine caddy hash-password)
           echo "DEMO_PASSWORD_HASH=$hash" >> "$GITHUB_ENV"
       - run: docker compose -f docker/compose.ticketpilot-hosted.yaml up -d --build --wait --wait-timeout 180
       - name: Trust the isolated gateway certificate
@@ -254,7 +254,13 @@ jobs:
       - run: uv run --no-sync python scripts/ticketpilot_hosted_smoke.py
       - name: Show failure logs
         if: failure()
-        run: docker compose -f docker/compose.ticketpilot-hosted.yaml logs --tail 100 agent_service gateway
+        run: |
+          if test -n "$DEMO_PASSWORD_HASH"; then
+            docker compose -f docker/compose.ticketpilot-hosted.yaml logs --tail 100 agent_service gateway
+          fi
       - name: Stop isolated CI stack
         if: always()
-        run: docker compose -f docker/compose.ticketpilot-hosted.yaml down --remove-orphans
+        run: |
+          if test -n "$DEMO_PASSWORD_HASH"; then
+            docker compose -f docker/compose.ticketpilot-hosted.yaml down --remove-orphans
+          fi
