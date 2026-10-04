@@ -1,248 +1,86 @@
-# TicketPilot：多租户 AI 售后工单与退款审批 Agent
+# TicketPilot
 
 [English](README.md) | 简体中文
 
-政策咨询可在演示页直接提交，无需订单号；工单页展示本轮实际检索策略、证据及回答附带的政策原文。政策语料含 163 条条款，检索支持 BM25、BGE、混合召回与重排。固定回答演示模式不代表调用了 LLM；真实模型模式需单独配置。
+面向多租户售后场景的 AI 工单系统，支持订单查询、政策检索和人工退款审批。系统由 React 运营控制台、LangGraph 工作流与 PostgreSQL 业务状态管理组成。
 
-> 基于开源 [`agent-service-toolkit`](https://github.com/JoshuaC215/agent-service-toolkit)（MIT）二次开发。
-> **模型负责理解语言；确定性代码、PostgreSQL 和人工审批控制权限、状态与副作用。**
+`React · TypeScript · FastAPI · LangGraph · PostgreSQL · Redis · Docker Compose`
 
-`React 19 · TypeScript · React Router 7 · FastAPI · LangGraph · PostgreSQL · Redis · Docker Compose · Playwright`
+## 核心功能
 
-<img src="media/ticketpilot/web-overview.png" width="1100" alt="TicketPilot AI 售后运营控制台">
+| 功能 | 实际行为 |
+| --- | --- |
+| 订单与物流查询 | 根据租户范围内的订单事实回答，运单信息脱敏展示 |
+| 政策检索 | 检索适用条款并附带引用，支持 BM25、向量、混合检索与重排 |
+| 多轮信息补充 | 跨消息补齐订单或退款信息 |
+| 退款审批 | 暂停等待人工决定，恢复后重新核验订单，再执行 mock 退款 |
+| 租户与角色隔离 | 按租户、客户所有权和角色约束读写，越权资源统一返回 404 |
+| 幂等执行 | 区分重试与新的退款动作，并发重试复用原工单与运行记录 |
+| 运营控制台 | 展示工单、审批、处理结果、执行事件与业务统计 |
+| 检索缓存 | 可选 Redis 缓存，按租户与版本隔离，故障时回退到直接检索 |
 
-## 它解决什么问题
-
-电商售后场景里，客户用自然语言查物流、问政策、申请退款。让大模型直接操作订单系统有三类风险：越权读到别人的订单、把"提到退款"误当成"申请退款"、网络重试或并发导致重复退款。TicketPilot 把这三类风险交给确定性代码和数据库约束，而不是交给提示词：
-
-- **权限**：Bearer Token 解析成可信的 `tenant / actor / role`，跨租户、跨客户访问统一返回 404；专用模式下关闭上游所有通用 Agent 入口。
-- **意图边界**：只有模型给出明确金额或明确全额意图才生成退款提案；缺订单号、缺金额、否定退款、订单冲突都进入「等待补充」或普通回答，不创建审批。
-- **副作用**：退款必须经过人工审批（LangGraph `interrupt()` 暂停，审批后从 checkpoint 恢复），执行前重新复验订单事实；请求层和业务动作层各有一套幂等，同一次申请重试不重复退款，再次申请相同金额是新动作。
-
-## 30 秒看懂主链路
-
-```text
-客户消息 ──► POST /v1/tickets（Idempotency-Key）
-              │  Token → tenant/actor/role；同 key 同正文 → 返回原 ticket/run
-              ▼
-        预留 active run（数据库条件更新，一张工单同一时刻只有一个执行者）
-              ▼
-   LangGraph：分类意图 → 订单 Tool → 政策检索 → 规划动作
-              │
-     ├─ 只读问题 ──► 有证据地回答（ANSWERED）或说明缺证据 / 依赖失败
-     ├─ 缺信息  ──► WAITING_INFORMATION（NEEDS_INPUT），下一条消息补齐后继续
-     └─ 退款   ──► 保存 PENDING 审批 → interrupt() 暂停（WAITING_APPROVAL）
-                        ▼
-          审批员 POST /v1/approvals/{id}:decide
-                        ▼
-      Command(resume) 从 checkpoint 恢复 → 复验订单 → Mock 退款一次 → 审计
-```
-
-工单状态（`NEW / PROCESSING / WAITING_INFORMATION / WAITING_APPROVAL / RESOLVED / FAILED`）与本轮处理结果（`ANSWERED / NEEDS_INPUT / WAITING_APPROVAL / DEPENDENCY_FAILED / INSUFFICIENT_EVIDENCE / PROCESSING_FAILED`）是两个维度，数据库层约束合法组合：订单服务超时不会被说成"订单不存在"，政策无命中不会被记成"已回答"。
-
-## 架构
+## 处理流程
 
 ```mermaid
-flowchart TB
-    W["React 运营控制台<br/>总览 · 工单 · 审批 · Execution Runway · 面试演示"]
-    SW["Streamlit 内部调试台"]
-    API["FastAPI · TicketPilot 专用模式<br/>业务动作 API + tenant-scoped 列表/看板读模型"]
-    P["Bearer Token → 可信 tenant / actor / role"]
-    S["TicketService + Repository<br/>事务 · 行锁 · 两层幂等 · active run 归属 · 执行前复验"]
-    DB[("PostgreSQL 业务表<br/>tickets · messages · orders · approvals · audit_events")]
-    LG["LangGraph 工单 graph<br/>classify → query_order → search_policy → plan_work<br/>→ 只读：grounded answer → finalize<br/>→ 退款：create_pending_approval → interrupt() ⏸ → 审批后 Command(resume) → verify → execute_refund_mock"]
-    CK[("LangGraph checkpoint")]
-    M["Reasoner：真实模型 或 确定性演示"]
-    W --> API --> P --> S
-    SW --> API
-    S <--> DB
-    S --> LG
-    LG <--> DB
-    LG --- CK
-    LG -.-> M
+flowchart TD
+    UI["运营控制台"] --> API["FastAPI：身份校验与业务命令"]
+    API --> G["LangGraph：意图分类、订单查询、政策检索"]
+    G --> R["基于证据回答或请求补充信息"]
+    G --> A["退款提案：暂停等待人工审批"]
+    A --> V["恢复执行并重新核验订单事实"]
+    V --> F["执行 mock 退款"]
+    API <--> DB[("PostgreSQL：订单、工单、审批与审计")]
+    G <--> DB
+    G --> C["政策检索与可选 Redis 缓存"]
 ```
 
-审批时序（同一次申请重试与同金额新申请的区别在最后两步）：
+工单状态与处理结果分别记录，证据不足、依赖故障、等待补充信息和完成回答具有明确的结果语义。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as 客户
-    participant API as FastAPI
-    participant DB as PostgreSQL
-    participant G as LangGraph
-    participant H as 审批员
-    C->>API: POST /v1/tickets/{id}/messages「100 元」+ Idempotency-Key
-    API->>DB: 插入 message，预留 active_run_id（条件更新）
-    API->>G: ainvoke(run_id, thread_id)
-    G->>DB: 分类 / 查订单 / 检索政策 → 写审计
-    G->>DB: 以 message_id 为 action_id 创建 PENDING approval
-    G-->>API: interrupt()，工单 WAITING_APPROVAL
-    API-->>C: 200 · processing_result = WAITING_APPROVAL
-    H->>API: POST /v1/approvals/{id}:decide APPROVE
-    API->>DB: 行锁 approval → APPROVED，预留新 run
-    API->>G: Command(resume) 从 checkpoint 恢复
-    G->>DB: 复验订单余额 / 币种 / 状态 → 扣减一次 → REFUND_EXECUTED
-    C->>API: 重发同一请求（同 key 同正文）
-    API-->>C: 返回原 run，不再执行
-    C->>API: 新消息「再退 100 元」（新 key）
-    API->>G: 新 message → 新 action_id → 新 approval
-```
+## 功能展示
 
-## 我做了什么（与上游的边界）
+真实模型运行中的订单查询：展示物流事实、政策引用与处理进度。
 
-| 层 | 上游 `agent-service-toolkit` 已提供 | 本项目新增 |
-| --- | --- | --- |
-| 服务框架 | FastAPI 服务、通用 Agent 注册、SSE、Streamlit 聊天 UI、Docker Compose | `TICKETPILOT_ENABLED` 专用模式：只挂载 `/v1` 业务 API、`/info`、`/health`，通用入口返回 404 |
-| 工作流 | LangGraph `interrupt()` / `Command(resume)` 示例、PostgreSQL checkpointer | 工单专用 graph：意图分类、订单/政策 Tool、风险路由、退款审批暂停与恢复、结果语义 |
-| 持久化 | checkpoint 与 store 接入 | 独立业务连接池、8 个版本化迁移、五张业务表、约束/唯一索引，以及百万级历史的流式 `COPY` 与质量校验 |
-| 身份 | 可选 Bearer 校验 | `TICKETPILOT_AUTH_TOKENS` → `RequestPrincipal`；资源归属下推到 SQL；角色权限 |
-| 可靠性 | — | 创建/消息请求幂等、退款动作幂等、active run 归属、审批重放、执行前复验 |
-| 评测 | — | 18 + 6 条开发/迁移样本，以及 120 条困难中文评测集；精确匹配、分类别 F1、混淆矩阵、Wilson 区间和延迟分位数 |
-| 演示 | 通用聊天页 | React/TypeScript 运营控制台与 Execution Runway；Streamlit 保留为内部调试台；API 与浏览器黄金链路脚本 |
+<img src="media/ticketpilot/llm-01-logistics-answered.png" width="1000" alt="订单查询中的物流事实、政策引用与处理事件">
 
-上游核对版本为 `0c58abfce18ba97d10507f0ffd0b151d5a843e74`，于 2026-08-26 引入，本地基线导入提交为 `e20d288`。[`LICENSE`](LICENSE) 保留原 MIT 版权声明。TicketPilot 作为独立仓库维护，上游更新单独评估；上游能力不是本人从零实现。
+## 验证结果
 
-## 代码归档与本地文件
+| 验证场景 | 结果 |
+| --- | --- |
+| 合成历史数据加载 | 12 个租户、1,000,000 条订单、共 3,246,760 条关联记录；21 项跨表检查通过 |
+| 并发重试 | 100 次相同创建只产生一个工单与 run；100 次相同审批只执行一次 mock 退款 |
+| HTTP 只读查询 | 5,000/5,000 请求成功；本地并发 20 时峰值约 199 requests/s |
+| 中文意图与字段抽取 | 120 条诊断集四字段严格匹配 101/120，84.17% |
+| 定向 schema 回归 | 独立 45 条回归集严格匹配 44/45，97.78% |
+| 自动化检查 | 默认 Python：325 passed、44 skipped；PostgreSQL：147 passed；前端：4 项测试通过 |
 
-Git 只归档源码、测试、迁移、脱敏 `.env.example` 模板、自建合成政策与评测输入，以及中英文 README。学习笔记、设计文档、面试材料、PDF、压测报告、模型输出和运行工件仅保存在本地；`.gitignore` 排除提交，`.dockerignore` 同时排除 Docker 构建上下文中的私有材料。真实 `.env`、各环境变体、凭据、私钥和数据库快照不入库，模板中的示例值不能当作部署凭据。
-
-下文的历史装载和评测数字是本地实验汇总，新克隆不包含原始报告。看板优先读取 PostgreSQL 中的装载登记；没有登记数据或可选的本地 `history_benchmark.json` 时，不填充历史数据集数字。上游通用 RAG 示例同样需要自行提供本地文档和索引。取消跟踪的文件仍留在维护者本机；忽略规则不会删除旧 Git 提交中的副本。
-
-## 可靠性设计：五个被验证过的问题
-
-| 编号 | 问题 | 设计 | 证据 |
-| --- | --- | --- | --- |
-| P0-A 入口隔离 | `/v1` 有权限检查，但上游 `history / threads / invoke / stream` 仍能碰到同一份 checkpoint | 专用模式不挂载通用路由、不加载通用 Agent；无身份 401，越权 404，被拒请求不写任何数据 | `tests/service/test_ticketpilot_isolation.py`、`tests/ticketpilot/test_api_isolation.py` |
-| P0-B 退款语义 | 旧逻辑凭"退款"关键词覆盖模型分类，且缺金额时默认全额 | 分类只信结构化输出；只有明确金额或 `full_refund_requested` 才提案；缺信息进入有边界的多轮补充（`pending_request`），取消/换话题不继承 | `tests/ticketpilot/test_refund_intent.py`、`test_workflow_graph.py` |
-| P0-C 运行归属 | 两条消息交错时，graph 读到"最新消息"而不是触发它的那条；旧 run 的迟到失败可能覆盖新状态 | 消息与 run 绑定，短事务预留 `active_run_id`，长任务在事务外运行，每次写回校验所有权；执行中再来消息返回 409 | `tests/ticketpilot/test_run_ownership.py`（用同步屏障制造交错） |
-| P0-D 两层幂等 | 按 `ticket+order+amount` 判同一动作，无法区分"重试"与"再退一次" | 请求层：`tenant + actor + Idempotency-Key` + 正文摘要；动作层：触发消息 ID 作为 `action_id`，数据库唯一约束 | `tests/ticketpilot/test_ticket_repository.py`、`migrations/0005` |
-| P1-A 结果语义 | 超时、无证据、缺信息都被标成 `RESOLVED` | `processing_result` 六种结果与工单状态分离，数据库约束合法组合，界面按结果提示 | `migrations/0006`、`tests/ticketpilot/test_workflow_graph.py` |
-
-明确不宣称：跨真实支付系统的 exactly-once（当前退款是 Mock，真实支付需要支付方幂等键、Outbox 与对账）；进程被强杀后的自动接管（已认领的 run 需要后续恢复机制）。
-
-## 百万级合成历史与并发验证
-
-默认历史 manifest 已在 PostgreSQL 16 实际落库：**1,000,000 订单、235,924 工单、478,813 消息、56,127 审批、1,475,896 审计事件，共 3,246,760 行**，覆盖 12 租户与 730 天。生成器按 20,000 订单流式分批、按外键顺序 `COPY`，196.360 秒完成装载；21 条跨表质量规则全部通过。数据集指纹支持幂等重跑，第二次装载阶段 0.560 秒识别并跳过，行数不增加；一组真实索引查询实际走 `Index Scan`。
-
-另有可执行规模演示：10,000 笔合成订单、10 租户、1,000 个客户、24 个政策片段；12 类业务场景在 10 租户下共 120 次工作流验证。预生成历史以 `SYNTHETIC_HISTORY` 标识，与真实 Service/LangGraph 运行产生的 `LIVE_RUN` 分开统计。生成与校验脚本位于 `scripts/`，输入 manifest 位于 `data/ticketpilot/`。
-
-复现生成器可先运行 `uv run python scripts/ticketpilot_history_data.py --orders 1000 --dry-run`。完整百万级入库需用 `--dsn` 指向专用的本地 PostgreSQL 数据库，可用 `--output` 将报告写到本地；不要指向生产库。
-
-本机做了两种明确分口径的负载实验。完整业务工作流 `TicketService → LangGraph → PostgreSQL` 在 1/10/30/100 并发下各运行 200 次，全部成功；100 次相同请求最终只有一个 ticket/run，100 次相同审批只扣减一次 Mock 金额、只产生一条 `REFUND_EXECUTED`。并发 10 后吞吐不再上升，并发 100 的 P95 达到 9.515 秒，暴露出连接池/checkpoint 写入的容量边界。
-
-另一次 HTTP 只读实验经 `Nginx → Uvicorn/FastAPI → Bearer → PostgreSQL`，在 1/20/50/100/200 并发下各发出 1,000 次请求，5,000/5,000 返回 200；本机峰值约 199 req/s（并发 20），并发 200 时约 172 req/s、P95 1.524 秒。后续 1,000 客户端并发、3,000 请求的只读补测中，3,000/3,000 返回 200，但吞吐下降至 180.58 req/s，P95 升至 7.184 秒。它们不包含 LLM 和写动作，不能冒充 Agent 端到端 QPS 或生产 SLA。测量脚本为 `scripts/ticketpilot_http_benchmark.py`。
-
-## 政策检索缓存
-
-可选 Redis 包装器按租户、语料版本、生效条款、查询和检索配置缓存政策 ID，引用正文仍从当前语料重建。短期空结果缓存、有界等待和按持有者发布的租约减少跨进程冷启动重复计算；Redis 失联则直接检索。订单、审批和退款事实仍由 PostgreSQL 管理。启动时叠加 `docker/compose.ticketpilot-redis.yaml`；不叠加即不启用缓存。参数见 `.env.example`，回放脚本为 `scripts/evaluate_ticketpilot_cache.py`，本地结果报告不入 Git。
-
-## 真实模型评测（M2）
-
-`scripts/evaluate_ticketpilot_classification.py` 对真实 `LangChainTicketReasoner` 的意图分类与字段抽取做可复现评测：四个字段（意图、订单号、明确金额、全额标志）全对才算整条正确，记录模型、temperature、数据与代码哈希、逐条输出与耗时。评测器现支持受控并发，并输出 Wilson 95% 区间、按场景/难度准确率、分类别 precision/recall/F1、混淆矩阵与 P50/P95/P99。
-
-| 样本 | 提示词 v1 | 提示词 v2 |
-| --- | ---: | ---: |
-| 原 18 条开发集 | 15/18 | 18/18 |
-| 6 条针对性迁移样本 | 4/6 | 5/6 |
-
-2026-09-14 单次实验，`qwen3.7-flash`，temperature 0.5，平均每条约 13–15 秒。v2 只改系统提示词（明确全额标志、已知订单继承、纯订单号路由），三处原始错误修复且无退步；「支付的钱全部退给我」仍漏全额标志，保留为已知限制。这是开发集成绩，不是线上准确率。
-
-2026-09-15 在新建的 120 条困难中文评测集上，`qwen3.7-flash` 四字段严格精确匹配为 **101/120（84.17%，Wilson 95% CI 76.59%–89.62%）**，类别字段 95.83%，订单号 95.00%，金额 97.50%，全额标志 86.67%；3 条调用/结构校验错误保留在分母内。最大弱项集中在全额退款口语化表达（2/15），属于保守漏识别而非越权执行。
-
-排查发现，OpenAI-compatible wire schema 没把所有字段列为必填，provider 会省略 `full_refund_requested`，本地默认值又把缺失掩盖成 `false`。改成所有字段必填并移除默认值后，对受影响与相邻回归族做 45 条定向复测：**44/45（97.78%，Wilson 95% CI 88.43%–99.61%）**、0 调用错误；全额退款从 **2/15 提升到 15/15**，否定/取消仍为 15/15。这里明确不把 45 条定向成绩说成修复后 120 条总分，完整口径见评测文档。
-
-集成时发现的一个真实问题：兼容服务不支持 `Decimal` 生成的 JSON Schema 正则，请求在模型回答前就被 400 拒绝；解决方式是 wire schema 用 `number | null`，返回后仍由 Pydantic 做正数、两位小数和上限校验。
+模型评测使用 `qwen3.7-flash`，意图、订单号、金额与全额退款标志全部匹配才算正确。45 条结果属于定向回归，不代表修复后的 120 条总分。HTTP 只读测试不包含模型调用与写操作；不同测试集合存在重叠，不能相加。
 
 ## 快速开始
 
-一键全容器演示（确定性 reasoner，不需要模型 API Key）：
+需要 Docker Compose。复制环境模板后，在 `.env` 添加 `TICKETPILOT_RETRIEVAL_STRATEGY=bm25`，即可使用无需下载向量模型的检索方式。
 
 ```sh
-cp .env.example .env            # 至少保留 POSTGRES_* 默认值
+cp .env.example .env
 docker compose -f compose.yaml -f docker/compose.ticketpilot-demo.yaml up -d --build
 ```
 
-打开 `http://localhost:3000` 使用 React 运营控制台；演示页提供物流、退款审批和无需订单号的政策 RAG 场景。确定性演示不调用付费模型。`http://localhost:8501` 保留为内部 Streamlit 调试台。
+- 运营控制台：<http://localhost:3000>
+- API 健康检查：<http://localhost:8080/health>
+- 售后工作台：<http://localhost:8501>
 
-自动化验收：
+默认演示使用确定性 reasoner 和合成订单，无需模型 API key，退款为 mock 操作。真实模型配置见 [`.env.example`](.env.example)。
 
-```sh
-uv run python scripts/ticketpilot_demo.py                          # API 级黄金链路
-uv run --with playwright python scripts/ticketpilot_ui_e2e.py      # 浏览器级黄金链路，并刷新截图
-```
-
-## 演示截图
-
-| 工单工作台 | 面试演示航线 |
-| --- | --- |
-| <img src="media/ticketpilot/web-tickets.png" width="440"> | <img src="media/ticketpilot/web-demo.png" width="440"> |
-
-真实模型模式（`qwen3.7-flash`，本机后端）下的物流查询：模型只用订单 Tool 返回的事实和检索到的政策片段作答，运单号已脱敏，回答旁可展开引用。
-
-<img src="media/ticketpilot/llm-01-logistics-answered.png" width="900" alt="真实模型模式下的物流查询回答">
-
-| 模糊退款进入「等待补充」 | 审批员视角 | 跨租户访问统一 404 |
-| --- | --- | --- |
-| <img src="media/ticketpilot/03-needs-input.png" width="290"> | <img src="media/ticketpilot/05-approver-view.png" width="290"> | <img src="media/ticketpilot/08-cross-tenant-404.png" width="290"> |
-
-全部截图见 [`media/ticketpilot/`](media/ticketpilot/)，由 `scripts/ticketpilot_ui_e2e.py` 自动生成；`llm-*` 前缀的来自真实模型后端，其余来自确定性演示后端。同一条黄金链路在两种后端上都通过（确定性 55 秒，真实模型 108 秒）。
-
-## 测试与验证
+## 验证方式
 
 ```sh
 uv sync --frozen --extra retrieval
-uv run pytest                                  # 默认：不依赖 PostgreSQL
-uv run pytest tests/ticketpilot --run-docker   # 需要 compose 里的 PostgreSQL
-uv run ruff check src tests scripts
+uv run pytest
+uv run pytest tests/ticketpilot --run-docker
+uv run python scripts/ticketpilot_demo.py
 ```
 
-2026-09-15 在 Windows 11 / Python 3.12 上的结果：默认全量 `297 passed, 39 skipped`；PostgreSQL 专项 `114 passed`；服务隔离专项 6 passed；React 浏览器验收控制台 0 错误、390px 无横向溢出，同 key 重试返回相同 ticket/run。数字来自有重叠的不同测试集合，不能相加。
+PostgreSQL 与 API 检查需要演示栈运行。GitHub Actions 同时覆盖 Python 3.12–3.14、类型、格式、前端构建、Docker 集成与 HTTPS 演示认证。
 
-## CI 与私有线上演示
+## 实现与许可证
 
-GitHub Actions 检查 Python 3.12–3.14、格式、类型、两份 README、React 构建和前端测试。独立 PostgreSQL 作业在隔离数据库运行业务测试，覆盖多个实例首次启动的迁移初始化；上游通用 Docker 集成测试单独保留。
-
-在专用 Linux Docker 主机部署带密码的面试演示：
-
-```sh
-cp .env.example .env.hosted
-docker run --rm -it caddy:2-alpine caddy hash-password
-# 编辑 .env.hosted：独立 POSTGRES_PASSWORD、TICKETPILOT_DOMAIN、
-# DEMO_USERNAME 和 DEMO_PASSWORD_HASH='包含所有美元符号的完整哈希'。
-docker compose --env-file .env.hosted -f docker/compose.ticketpilot-hosted.yaml up -d --build --wait --wait-timeout 180
-```
-
-域名 DNS 指向主机，开放 80/443。Caddy 自动管理 HTTPS，页面和 API 都需要演示账户登录。仅网关发布主机端口，PostgreSQL 和 FastAPI 留在 Compose 网络，不部署内部 Streamlit 工作台。前端 gateway 模式保留浏览器登录，由网关选择两个合成演示身份之一。固定使用确定性 reasoner、BM25 和合成订单，不向容器传入模型凭据。这是共享的私有演示环境；真实客户认证和真实支付仍需另行实现。
-
-手动触发 **Release images** 工作流，仅允许 CI 已成功的 `main` 提交发布 GHCR 镜像，标签固定为 `sha-<完整 commit>`。使用镜像时，在 `.env.hosted` 设置 `TICKETPILOT_IMAGE_PREFIX=ghcr.io/fionnleee/ticketpilot` 和 `APP_VERSION=sha-<完整 commit>`；私有包先完成 Docker 的 GHCR 登录，然后执行 `docker compose --env-file .env.hosted -f docker/compose.ticketpilot-hosted.yaml pull`，再执行 `up -d --no-build --wait`。保留上一版镜像标签用于回滚，保留数据库和证书命名卷，升级前备份 PostgreSQL，不对需保留的数据执行 `down -v`。旧镜像不保证兼容新版数据库结构。
-
-## 目录
-
-```text
-src/ticketpilot/            业务代码：api / services / repositories / workflow_repository / graph / tools / reasoning / schemas / domain
-frontend/                   React Router 运营控制台：总览 / 工单 / 审批 / 面试演示
-src/ticketpilot_streamlit.py 内部调试工作台
-src/client/ticketpilot.py   业务 API 客户端
-migrations/ticketpilot/     0001–0008 版本化 SQL 迁移
-data/ticketpilot/           合成订单/历史 manifest、政策语料、分类评测集
-scripts/                    API/浏览器验收、百万历史装载、规模并发与真实模型评测脚本
-tests/ticketpilot/          API、隔离、仓储、并发归属、退款语义、graph、评测器测试
-```
-
-## 上游工具包与通用模式
-
-`TICKETPILOT_ENABLED=false` 时仓库仍是完整的上游 Agent 服务工具包：多 Agent、流式 SSE、AG-UI、RAG 示例、语音等，用法见[上游 README](https://github.com/JoshuaC215/agent-service-toolkit#readme)。不要把保存了 TicketPilot 数据的实例切回通用模式对外开放：专用模式是通过关闭通用入口实现的应用边界，没有物理隔离历史 checkpoint。
-
-通用开发方式（也适用于本地运行 TicketPilot 后端）：
-
-```sh
-uv sync --frozen
-uv run python src/run_service.py          # FastAPI，默认 8080
-uv run streamlit run src/streamlit_app.py # Streamlit，默认 8501
-docker compose watch                      # 或者：全容器 + 源码热更新
-```
-
-## 许可证
-
-MIT，原始版权声明保留在 [`LICENSE`](LICENSE)，上游来源与贡献边界见上文。所有演示数据均为合成数据，不含真实客户信息。
+TicketPilot 基于 MIT 许可的 [agent-service-toolkit](https://github.com/JoshuaC215/agent-service-toolkit)，在服务与 checkpoint 基础上增加了工单工作流、租户范围内的业务仓储、审批控制、幂等、检索与运营控制台。原始版权声明保留在 [LICENSE](LICENSE)。
