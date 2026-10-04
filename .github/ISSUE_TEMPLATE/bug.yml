@@ -1,0 +1,18 @@
+name: Bug report
+description: Report a reproducible TicketPilot failure.
+labels: [bug]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and expected behavior
+      description: Include the commit and deterministic or real-model mode. Remove credentials and customer data.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Actual result and sanitized evidence
+      description: Include error codes, failed tests or screenshots without tokens or personal information.
+    validations:
+      required: true

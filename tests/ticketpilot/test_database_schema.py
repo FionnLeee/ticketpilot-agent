@@ -3,12 +3,63 @@ import sys
 from uuid import uuid4
 
 import pytest
-from psycopg import errors
+from psycopg import AsyncConnection, errors, sql
+from psycopg.conninfo import make_conninfo
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 
+from memory.postgres import get_postgres_connection_string
 from ticketpilot.db import apply_migrations, get_ticketpilot_pool
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
+async def test_fresh_database_migration_initialization_is_serialized() -> None:
+    database_name = f"ticketpilot_migration_test_{uuid4().hex}"
+    admin = await AsyncConnection.connect(get_postgres_connection_string(), autocommit=True)
+    try:
+        await admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+        conninfo = make_conninfo(get_postgres_connection_string(), dbname=database_name)
+        locker = await AsyncConnection.connect(conninfo, autocommit=True)
+        try:
+            await locker.execute(
+                "SELECT pg_advisory_lock(hashtext('ticketpilot-schema-migrations'))"
+            )
+            async with AsyncConnectionPool(
+                conninfo, min_size=4, max_size=4, kwargs={"row_factory": dict_row}
+            ) as pool:
+                tasks = [asyncio.create_task(apply_migrations(pool)) for _ in range(4)]
+                try:
+                    async with asyncio.timeout(10):
+                        while True:
+                            cursor = await locker.execute(
+                                "SELECT count(*) FROM pg_stat_activity "
+                                "WHERE datname = %s AND wait_event = 'advisory'",
+                                (database_name,),
+                            )
+                            if (await cursor.fetchone())[0] == 4:
+                                break
+                            await asyncio.sleep(0.02)
+                    cursor = await locker.execute("SELECT to_regnamespace('ticketpilot')")
+                    assert (await cursor.fetchone())[0] is None
+                finally:
+                    await locker.execute(
+                        "SELECT pg_advisory_unlock(hashtext('ticketpilot-schema-migrations'))"
+                    )
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                assert all(isinstance(result, list) for result in results), results
+                assert sum(len(result) for result in results) == 8
+                assert await apply_migrations(pool) == []
+        finally:
+            await locker.close()
+    finally:
+        await admin.execute(
+            sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database_name))
+        )
+        await admin.close()
 
 
 @pytest.mark.docker

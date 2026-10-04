@@ -53,6 +53,9 @@ async def apply_migrations(
 
     async with pool.connection() as connection:
         async with connection.transaction():
+            await connection.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('ticketpilot-schema-migrations'))"
+            )
             await connection.execute("CREATE SCHEMA IF NOT EXISTS ticketpilot")
             await connection.execute(
                 """
